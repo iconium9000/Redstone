@@ -18,6 +18,7 @@ const TOK_RNG = 9
 const TOK_TXT = 10;
 const TOK_CHR = 11;
 const TOK_SUB = 12;
+const TOK_X = 13;
 
 const TOK_NAMES = {
   ary: TOK_ARY,
@@ -33,6 +34,7 @@ const TOK_NAMES = {
   txt: TOK_TXT,
   chr: TOK_CHR,
   sub: TOK_SUB,
+  x: TOK_X
 };
 
 function newctx( ctx, apply ) {
@@ -142,7 +144,7 @@ function parser_helper( info, ctx, tok ) {
 
       for (const i in ctx.snip.arguments) {
         ret = parser(info, newctx(ctx, {
-          snip: ret.snip.arguments[i]
+          snip: ctx.snip.arguments[i]
         }));
 
         if ( ret.flag == FLAG_G ) flag = FLAG_G;
@@ -180,7 +182,7 @@ function parser_helper( info, ctx, tok ) {
       const ret = newctx(ctx, {
         solve: [],
         stop_idx: ctx.start_idx,
-        snip: ret.snip.argument,
+        snip: ctx.snip.argument,
         flag:FLAG_F
       });
 
@@ -274,22 +276,29 @@ function parser_helper( info, ctx, tok ) {
 
       return ret;
     }
+
+    // snip: { argument }
+    case TOK_X: {
+      const ret = parser(info, newctx(ctx, {
+        snip: ctx.snip.argument
+      }));
+
+      if (ret.error) return ret;
+      return newctx(ret, { solve:[] });
+    }
   }
 };
 
-
-let sanity = 100;
 function parser( info, ctx ) {
-  if (--sanity < 0) {
-    throw "sanity";
-  }
+  let stop_idx = ctx.start_idx;
 
   if (!info.map[ctx.start_idx]) info.map[ctx.start_idx] = {};
   let state = info.map[ctx.start_idx][ctx.snip.id];
 
   if (!state) state = { error:true, flag:FLAG_N };
 
-  while (true) {
+  do {
+    if (!state.error) stop_idx = state.stop_idx;
 
     switch (state.flag) {
       case FLAG_H:
@@ -380,9 +389,12 @@ function parser( info, ctx ) {
         return ret;
       }
     }
-
   }
+  while (state.error || stop_idx < state.stop_idx);
 
+  state = newctx( state, { flag:FLAG_F } );
+  info.map[ctx.start_idx][ctx.snip.id] = state;
+  return state;
 }
 
 function lexparser( string, snip ) {
@@ -420,7 +432,7 @@ function snipper_helper( builds, [root, ...ary] ) {
     case TOK_CAT: {
       const snip = {
         id: ++builds.idx,
-        tok: TOK_ARY,
+        tok: TOK_CAT,
         arguments: []
       };
       for (const i in ary) {
@@ -548,6 +560,15 @@ function snipper_helper( builds, [root, ...ary] ) {
       };
       builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
       return snip;
+    }0
+    // snip: { argument:snip }
+    case TOK_X: {
+      const snip = {
+        id: ++builds.idx,
+        tok: TOK_X,
+      };
+      builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
+      return snip;
     }
   }
 }
@@ -576,14 +597,15 @@ function snipper( protosnip, startname ) {
 
 const prim_protosnip = {
   start: [
-    "or",
-    ["ary",["mch","start"],["cmp","b"]],
-    ["cmp","a"]
+    "cat",
+    ["x",["rep",["cmp"," "]]],
+    ["cmp","a"],
+    ["rep",["cmp","b"]]
   ]
 };
 
 const prim_snip = snipper(prim_protosnip, "start");
 log("prim_snip",prim_snip);
 
-const parsed_lex = lexparser("a", prim_snip);
-log(parsed_lex)
+const parsed_lex = lexparser("    abbb", prim_snip);
+log(parsed_lex.solve)

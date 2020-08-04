@@ -1,0 +1,21 @@
+a := b* ac | k
+
+
+bkccc
+bbbkcc
+
+funs:
+
+  lst
+  or
+  and
+  not
+  rep
+  cmp
+  mch
+  chr
+  rng
+  ary
+  cat
+  txt
+  sub

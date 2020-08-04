@@ -1,0 +1,102 @@
+1 or  2 4
+2 ary 1 3
+3 cmp 'b'
+4 cmp 'a'
+
+xH { error:true, flag:H }
+xG { error:true, flag:G }
+xN null, { error:true}
+
+aH { flag:false }
+aG { flag:true }
+aN { flag:null }
+
+
+while true
+  switch
+
+    P:xF
+      <- xF
+
+    P:aF
+      <- aF
+
+    P:xH
+      P <- xG
+    P:xG
+      <- xG
+
+    P:aH
+      P <- aG
+    P:aG
+      <- aG
+
+    P:xN
+      P <- xH
+
+    P:aN
+      P <- aH
+
+  switch
+
+    -> xN switch
+      P:xH
+        P <- xN
+        <- xN
+
+      P:xG
+        P <- xN
+        loopback
+
+      P:cH
+      P:cG
+        P <- cF
+        <- cF
+
+    -> xG switch
+      P:xG
+      P:xH
+        P <- xN
+        <- xG
+      P:cG
+      P:cH
+        P <- cF
+        <- cF
+
+    -> xF switch
+      P:xG
+      P:xH
+        P <- xF
+        <- xF
+      P:cG
+      P:cH
+        P <- cF
+        <- cF
+
+    -> bN switch
+      P:xH
+      P:aH
+        P <- bN
+        <- bN
+      P:xG
+      P:cG
+        P <- bN
+        loopback
+
+    -> bG switch
+      P:cH
+      P:xH
+        P <- bN
+        <- bG
+      P:cG
+      P:xG
+        P <- bN
+        loopback
+
+    -> bF switch
+      P:xG
+      P:cG
+      P:xH
+      P:cH
+        P <- bF
+        <- bF

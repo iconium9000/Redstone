@@ -11,7 +11,6 @@ aH { flag:false }
 aG { flag:true }
 aN { flag:null }
 
-
 while true
   switch
 

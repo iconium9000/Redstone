@@ -37,25 +37,26 @@ const TOK_NAMES = {
   x: TOK_X
 };
 
-function newctx( ctx, apply ) {
-  return Object.assign({}, ctx, apply);
-}
-
-function parser_helper( info, ctx, tok ) {
-  switch (tok) {
+function parser_helper( info, snip, ctx ) {
+  switch (snip.tok) {
     // snip: { arguments:[...snip] }
     case TOK_ARY: {
-      const ret = newctx( ctx, {
+
+      const ret = {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.stop_idx,
         solve: [],
-        flag: FLAG_F
-      });
+        flag: ctx.flag
+      };
 
       for (const i in ret.snip.arguments) {
 
-        let sub = parser(info, newctx(ret, {
+        let sub = parser(info, ret.snip.arguments[i], {
           start_idx: ret.stop_idx,
-          snip: ret.snip.arguments[i]
-        }));
+          stop_idx: ctx.stop_idx,
+          solve: ctx.solve,
+          flag: ctx.flag
+        });
 
         if (sub.flag == FLAG_G) ret.flag = FLAG_G;
         else if (ret.flag != FLAG_G && sub.flag == FLAG_N) ret.flag = FLAG_N;
@@ -69,48 +70,35 @@ function parser_helper( info, ctx, tok ) {
       return ret;
     }
 
-    // snip: { arguments:[...snip] }
+    // snip: {}
     case TOK_CAT: {
-      const ret = newctx(ctx, {
+
+      let ret = {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.stop_idx,
         solve: [],
-        flag: FLAG_F
-      });
+        flag: ctx.flag
+      };
 
-      for (const i in ret.snip.arguments) {
-
-        let sub = parser(info, newctx(ret, {
-          start_idx: ret.stop_idx,
-          snip: ret.snip.arguments[i]
-        }));
-
-        if (sub.flag == FLAG_G) ret.flag = FLAG_G;
-        else if (ret.flag != FLAG_G && sub.flag == FLAG_N) ret.flag = FLAG_N;
-
-        if (sub.error) return { error:true, flag:ret.flag };
-
-        ret.stop_idx = sub.stop_idx;
-        ret.solve = ret.solve.concat(sub.solve);
+      for (const i in ctx.solve) {
+        ret.solve = ret.concat(ctx.solve[i]);
       }
 
       return ret;
     }
 
-    // snip: { argument:snip }
+    // snip: {}
     case TOK_SUM: {
 
-      let sub = parser(info, newctx(ctx, {
-        snip: ctx.snip.argument
-      }));
-
-      if (sub.error) return sub;
-
-      const ret = newctx(ctx, {
+      let ret = {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.stop_idx,
         solve: "",
-        flag: sub.flag
-      });
+        flag: ctx.flag
+      };
 
-      for (const i in sub.solve) {
-        ret.solve += sub.solve[i];
+      for (const i in ctx.solve) {
+        ret.solve += ctx.solve[i];
       }
 
       return ret;
@@ -121,16 +109,19 @@ function parser_helper( info, ctx, tok ) {
 
       let flag = FLAG_F;
 
-      for (const i in ctx.snip.arguments) {
+      for (const i in snip.arguments) {
 
-        const sub = parser(info, newctx(ctx, {
-          snip: ctx.snip.arguments[i]
-        }));
+        const sub = parser(info, snip.arguments[i], ctx);
 
         if ( sub.flag == FLAG_G ) flag = FLAG_G;
         else if ( flag != FLAG_G && sub.flag == FLAG_N ) flag = FLAG_N;
 
-        if (!sub.error) return newctx(sub, { flag:flag });
+        if (!sub.error) return {
+          start_idx: sub.start_idx,
+          stop_idx: sub.stop_idx,
+          solve: sub.solve,
+          flag: flag
+        };
       }
 
       return { error:true, flag:flag };
@@ -142,18 +133,22 @@ function parser_helper( info, ctx, tok ) {
       let ret = ctx;
       let flag = FLAG_F;
 
-      for (const i in ctx.snip.arguments) {
-        ret = parser(info, newctx(ctx, {
-          snip: ctx.snip.arguments[i]
-        }));
+      for (const i in snip.arguments) {
+        ret = parser(info, snip.arguments[i], ctx);
 
         if ( ret.flag == FLAG_G ) flag = FLAG_G;
         else if ( flag != FLAG_G && ret.flag == FLAG_N ) flag = FLAG_N;
 
-        if (ret.error) return newctx(ret, { flag:flag });
+        if (ret.error) return { error:true, flag:flag };
       }
 
-      return newctx(ret, { flag:flag });
+      return {
+        start_idx: ret.start_idx,
+        stop_idx: ret.stop_idx,
+        solve: ret.solve,
+        error: ret.error,
+        flag: flag
+      };
     }
 
     // snip: { arguments:[...snip] }
@@ -161,11 +156,9 @@ function parser_helper( info, ctx, tok ) {
 
       let flag = FLAG_F;
 
-      for (const i in ctx.snip.arguments) {
+      for (const i in snip.arguments) {
 
-        let sub = parser(info, newctx(ctx, {
-          snip: ret.snip.arguments[i]
-        }));
+        let sub = parser(info, snip.arguments[i], ctx);
 
         if ( sub.flag == FLAG_G ) flag = FLAG_G;
         else if ( flag != FLAG_G && sub.flag == FLAG_N ) flag = FLAG_N;
@@ -173,27 +166,35 @@ function parser_helper( info, ctx, tok ) {
         if (!sub.error) return { error:true, flag:flag };
       }
 
-      return newctx(ctx, { flag:flag });
+      return {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.stop_idx,
+        solve: ctx.solve,
+        flag:flag
+      };
     }
 
     // snip: { argument:snip }
     case TOK_REP: {
 
-      const ret = newctx(ctx, {
-        solve: [],
+      const ret = {
+        start_idx: ctx.start_idx,
         stop_idx: ctx.start_idx,
-        snip: ctx.snip.argument,
+        solve: [],
         flag:FLAG_F
       });
 
       while (true) {
 
-        let sub = parser(info, newctx(ret, {
-          start_idx: ret.stop_idx
-        }));
+        let sub = parser(info, snip.argument, {
+          start_idx: ret.stop_idx,
+          stop_idx: ctx.stop_idx,
+          solve: ctx.solve,
+          flag: ctx.flag
+        });
 
-        if ( sub.flag == FLAG_G ) ret.flag = FLAG_G;
-        else if ( ret.flag != FLAG_G && sub.flag == FLAG_N ) ret.flag = FLAG_N;
+        if (sub.flag == FLAG_G) ret.flag = FLAG_G;
+        else if (ret.flag != FLAG_G && sub.flag == FLAG_N) ret.flag = FLAG_N;
 
         if (sub.error || ret.stop_idx == sub.stop_idx) return ret;
         ret.stop_idx = sub.stop_idx;
@@ -201,14 +202,14 @@ function parser_helper( info, ctx, tok ) {
       }
     }
 
-    // snip: { map:{ "A": map{ ... } } }
+    // snip: { map:{ "A": { end:true, "B":{ ... } } } }
     case TOK_CMP: {
 
       let stop_idx = ctx.start_idx;
       let text = "";
-      let top = null;
+      let top = { error:true, flag:FLAG_F };
 
-      let {map} = ctx.snip;
+      let {map} = snip;
       while (stop_idx < info.string.length) {
 
         const char = info.string[stop_idx];
@@ -220,6 +221,7 @@ function parser_helper( info, ctx, tok ) {
           ++stop_idx;
 
           if (map.end) top = {
+            start_idx: ctx.start_idx,
             stop_idx: stop_idx,
             solve: text,
             flag: FLAG_F
@@ -228,16 +230,17 @@ function parser_helper( info, ctx, tok ) {
         else break;
       }
 
-      if (top) return newctx(ctx, top);
-      return { error:true, flag:FLAG_F };
+      return top;
     }
 
     // snip: { text:string }
     case TOK_TXT: {
-      return newctx(ctx, {
-        solve: ctx.snip.text,
+      return {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.start_idx,
+        solve: snip.text,
         flag: FLAG_F
-      });
+      };
     }
 
     // snip: {}
@@ -248,26 +251,29 @@ function parser_helper( info, ctx, tok ) {
         flag: FLAG_F
       };
 
-      return newctx(ctx, {
+      return {
+        start_idx: ctx.start_idx,
         stop_idx: ctx.start_idx + 1,
         solve: info.string[ctx.start_idx],
         flag: FLAG_F
-      });
-
+      };
     }
 
     // snip: { argument, path }
     case TOK_SUB: {
 
-      const ret = parser(info, newctx(ctx, {
-        snip: ctx.snip.argument
-      }));
+      const ret = {
+        start_idx: ctx.start_idx,
+        stop_idx: ctx.stop_idx,
+        solve: ctx.solve,
+        snip: snip.argument
+      };
 
       if (ret.error) return ret;
 
-      for (const i in ctx.snip.path) {
+      for (const i in snip.path) {
         try {
-          ret.solve = ret.solve[ ctx.snip.path[i] ];
+          ret.solve = ret.solve[ snip.path[i] ];
         }
         catch (error) {
           return { error:true, flag:ret.flag };
@@ -280,7 +286,7 @@ function parser_helper( info, ctx, tok ) {
     // snip: { argument }
     case TOK_X: {
       const ret = parser(info, newctx(ctx, {
-        snip: ctx.snip.argument
+        snip: snip.argument
       }));
 
       if (ret.error) return ret;
@@ -289,11 +295,11 @@ function parser_helper( info, ctx, tok ) {
   }
 };
 
-function parser( info, ctx ) {
+function parser( info, snip, ctx ) {
   let stop_idx = ctx.start_idx;
 
   if (!info.map[ctx.start_idx]) info.map[ctx.start_idx] = {};
-  let state = info.map[ctx.start_idx][ctx.snip.id];
+  let state = info.map[ctx.start_idx][snip.id];
 
   if (!state) state = { error:true, flag:FLAG_N };
 
@@ -303,24 +309,24 @@ function parser( info, ctx ) {
     switch (state.flag) {
       case FLAG_H:
         state = newctx( state, { flag:FLAG_G });
-        info.map[ctx.start_idx][ctx.snip.id] = state;
+        info.map[ctx.start_idx][snip.id] = state;
       case FLAG_F:
       case FLAG_G:
         return state;
       case FLAG_N:
         state = newctx( state, { flag:FLAG_H });
-        info.map[ctx.start_idx][ctx.snip.id] = state;
+        info.map[ctx.start_idx][snip.id] = state;
         break;
     }
 
-    let ret = parser_helper( info, ctx, ctx.snip.tok );
-    state = info.map[ctx.start_idx][ctx.snip.id];
+    let ret = parser_helper( info, snip.tok, ctx );
+    state = info.map[ctx.start_idx][snip.id];
 
     if (ret.error) switch (ret.flag) {
       case FLAG_N: {
         if (state.error) {
           ret = { error:true, flag:FLAG_N };
-          info.map[ctx.start_idx][ctx.snip.id] = ret;
+          info.map[ctx.start_idx][snip.id] = ret;
 
           if ( state.flag == FLAG_H ) {
             return ret;
@@ -332,7 +338,7 @@ function parser( info, ctx ) {
         }
         else {
           state = newctx( state, { flag:FLAG_F });
-          info.map[ctx.start_idx][ctx.snip.id] = state;
+          info.map[ctx.start_idx][snip.id] = state;
           return state;
         }
       }
@@ -340,26 +346,26 @@ function parser( info, ctx ) {
       case FLAG_G: {
         if (state.error) {
           ret = { error:true, flag:FLAG_N };
-          info.map[ctx.start_idx][ctx.snip.id] = ret;
+          info.map[ctx.start_idx][snip.id] = ret;
           return { error:true, flag:FLAG_G };
         }
         else {
           state = newctx( state, { flag:FLAG_F });
-          info.map[ctx.start_idx][ctx.snip.id] = state;
+          info.map[ctx.start_idx][snip.id] = state;
           return state;
         }
       }
 
       case FLAG_F: {
         state = newctx( state, { flag:FLAG_F });
-        info.map[ctx.start_idx][ctx.snip.id] = state;
+        info.map[ctx.start_idx][snip.id] = state;
         return state;
       }
     }
     else switch (ret.flag) {
       case FLAG_N: {
         ret = newctx( ret, { flag:FLAG_N });
-        info.map[ctx.start_idx][ctx.snip.id] = ret;
+        info.map[ctx.start_idx][snip.id] = ret;
 
         if (state.flag == FLAG_H) {
           return ret;
@@ -372,7 +378,7 @@ function parser( info, ctx ) {
 
       case FLAG_G: {
         ret = newctx( ret, { flag:FLAG_N });
-        info.map[ctx.start_idx][ctx.snip.id] = ret;
+        info.map[ctx.start_idx][snip.id] = ret;
 
         if (state.flag == FLAG_H) {
           return newctx( ret, { FLAG:FLAG_G });
@@ -385,7 +391,7 @@ function parser( info, ctx ) {
 
       case FLAG_F: {
         ret = newctx( ret, { flag:FLAG_F });
-        info.map[ctx.start_idx][ctx.snip.id] = ret;
+        info.map[ctx.start_idx][snip.id] = ret;
         return ret;
       }
     }
@@ -393,7 +399,7 @@ function parser( info, ctx ) {
   while (state.error || stop_idx < state.stop_idx);
 
   state = newctx( state, { flag:FLAG_F } );
-  info.map[ctx.start_idx][ctx.snip.id] = state;
+  info.map[ctx.start_idx][snip.id] = state;
   return state;
 }
 
@@ -408,7 +414,9 @@ function lexparser( string, snip ) {
     start_idx: 0,
     stop_idx: 0,
     snip: snip,
-    solve: null
+    solve: null,
+    flag: FLAG_N,
+    error: false
   };
 
   return parser( info, ctx );
@@ -560,7 +568,7 @@ function snipper_helper( builds, [root, ...ary] ) {
       };
       builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
       return snip;
-    }0
+    }
     // snip: { argument:snip }
     case TOK_X: {
       const snip = {

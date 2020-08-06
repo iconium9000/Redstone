@@ -146,7 +146,6 @@ function parser_helper( info, snip, ctx ) {
         start_idx: ret.start_idx,
         stop_idx: ret.stop_idx,
         solve: ret.solve,
-        error: ret.error,
         flag: flag
       };
     }
@@ -188,7 +187,7 @@ function parser_helper( info, snip, ctx ) {
 
         let sub = parser(info, snip.argument, {
           start_idx: ret.stop_idx,
-          stop_idx: ctx.stop_idx,
+          stop_idx: ret.stop_idx,
           solve: ctx.solve,
           flag: ctx.flag
         });
@@ -266,7 +265,7 @@ function parser_helper( info, snip, ctx ) {
         start_idx: ctx.start_idx,
         stop_idx: ctx.stop_idx,
         solve: ctx.solve,
-        snip: snip.argument
+        flag: ctx.flag
       };
 
       if (ret.error) return ret;

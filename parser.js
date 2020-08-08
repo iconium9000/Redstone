@@ -6,6 +6,30 @@ const FLAG_H = 1;
 const FLAG_G = 2;
 const FLAG_F = 3;
 
+const FLAG_xN = 0;
+const FLAG_aN = 1;
+const FLAG_xH = 2;
+const FLAG_aH = 3;
+const FLAG_xG = 4;
+const FLAG_aG = 5;
+const FLAG_xF = 6;
+const FLAG_aF = 7;
+
+const FLAG_NAMES = {
+  true: {
+    FLAG_N: FLAG_xN,
+    FLAG_H: FLAG_xH,
+    FLAG_G: FLAG_xG,
+    FLAG_F: FLAG_xF
+  },
+  false: {
+    FLAG_N: FLAG_aN,
+    FLAG_H: FLAG_aH,
+    FLAG_G: FLAG_aG,
+    FLAG_F: FLAG_aF
+  }
+};
+
 const TOK_ARY = 0;
 const TOK_CAT = 1;
 const TOK_SUM = 2;
@@ -44,192 +68,158 @@ const TOK_NAMES = {
   err: TOK_ERR
 };
 
-function parse_arguments( info, arguments, ctx ) {
-  if (arguments) {
-    const ret = {
-      start_idx: ctx.start_idx,
-      stop_idx: ctx.stop_idx,
-      solve: [],
-      flag: ctx.flag
-    };
-    let start_idx = ctx.start_idx;
-
-    for (const i in arguments) {
-      let sub = parser(info, arguments[i], {
-        start_idx: start_idx,
-        stop_idx: ctx.stop_idx,
-        solve: ctx.solve,
-        flag: ctx.flag
-      });
-
-      if (sub.flag == FLAG_G) ret.flag = FLAG_G;
-      else if (ret.flag != FLAG_G && sub.flag == FLAG_N) ret.flag = FLAG_N;
-
-      if (sub.error) return { error:true, flag:ret.flag };
-
-      start_idx = sub.stop_idx;
-      if (ret.stop_idx < sub.stop_idx) ret.stop_idx = sub.stop_idx;
-      ret.solve.push(sub.solve);
-    }
-    return ret;
-  }
-  else return {
-    start_idx: ctx.start_idx,
-    stop_idx: ctx.stop_idx,
-    solve: ctx.solve,
-    flag: ctx.flag
-  };
-}
-
-function parser_helper( info, snip, ctx ) {
+function parser_helper( snip, ctx ) {
   switch (snip.tok) {
-
-    // arguments:snip[]
     case TOK_ARY: {
-      return parse_arguments( info, snip.arguments, ctx );
-    }
+      let ret = {
+        stop_idx: ctx.start_idx,
 
-    // arguments:snip[],false
-    case TOK_CAT: {
-
-      let ret = parse_arguments( info, snip.arguments, ctx );
-      if (ret.error) return ret;
-
-      const {solve} = ret;
-      ret.solve = [];
-
-      for (const i in solve) {
-        ret.solve = ret.solve.concat(solve[i]);
-      }
-
-      return ret;
-    }
-
-    // arguments:snip[],false
-    case TOK_SUM: {
-
-      let ret = parse_arguments( info, snip.arguments, ctx );
-      if (ret.error) return ret;
-
-      const {solve} = ret;
-      ret.solve = "";
-
-      for (const i in solve) {
-        ret.solve += solve[i];
-      }
-
-      return ret;
-    }
-
-    // path:string[], argument:snip,false
-    case TOK_SUB: {
-
-      let ret;
-      if (ctx.argument) {
-        ret = parser(info, ret.argument, ctx);
-        if (ret.error) return ret;
-      }
-      else ret = {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.stop_idx,
-        solve: ctx.solve,
+        start_idx: 0,
+        solve: [],
+        map: {},
         flag: ctx.flag
       };
 
-      for (const i in snip.path) {
-        try {
-          ret.solve = ret.solve[ snip.path[i] ];
-        }
-        catch (error) {
-          return { error:true, flag:ret.flag };
-        }
-      }
-
-      return ret;
-    }
-
-    // arguments:snip[]
-    case TOK_OR: {
-
-      let flag = FLAG_F;
-
       for (const i in snip.arguments) {
-
-        const sub = parser(info, snip.arguments[i], ctx);
-
-        if ( sub.flag == FLAG_G ) flag = FLAG_G;
-        else if ( flag != FLAG_G && sub.flag == FLAG_N ) flag = FLAG_N;
-
-        if (!sub.error) return {
-          start_idx: sub.start_idx,
-          stop_idx: sub.stop_idx,
-          solve: sub.solve,
-          flag: flag
-        };
-      }
-
-      return { error:true, flag:flag };
-    }
-
-    // arguments:snip[]
-    case TOK_AND: {
-
-      let ret = ctx;
-      let flag = FLAG_F;
-
-      for (const i in snip.arguments) {
-        ret = parser(info, snip.arguments[i], ctx);
-
-        if ( ret.flag == FLAG_G ) flag = FLAG_G;
-        else if ( flag != FLAG_G && ret.flag == FLAG_N ) flag = FLAG_N;
-
-        if (ret.error) return { error:true, flag:flag };
-      }
-
-      return {
-        start_idx: ret.start_idx,
-        stop_idx: ret.stop_idx,
-        solve: ret.solve,
-        flag: flag
-      };
-    }
-
-    // argument:snip
-    case TOK_NOT: {
-      const ret = parser(info, snip.argument, ctx);
-
-      if (ret.error) return ctx;
-      return { error:true, flag:ret.flag };
-    }
-
-    // argument:snip
-    case TOK_REP: {
-
-      const ret = {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.start_idx,
-        solve: [],
-        flag:ctx.flag
-      };
-
-      while (true) {
-        let sub = parser(info, snip.argument, {
+        let sub = parser(snip.arguments[i], {
           start_idx: ret.stop_idx,
-          stop_idx: ret.stop_idx,
           solve: ctx.solve,
+          map: ctx.map,
           flag: ctx.flag
         });
 
         if (sub.flag == FLAG_G) ret.flag = FLAG_G;
         else if (ret.flag != FLAG_G && sub.flag == FLAG_N) ret.flag = FLAG_N;
 
-        if (sub.error || ret.stop_idx == sub.stop_idx) return ret;
-        ret.stop_idx = sub.stop_idx;
+        if (sub.error) return { error:true, flag:ret.flag };
+
         ret.solve.push(sub.solve);
+        ret.stop_idx = sub.stop_idx;
       }
+      return ret;
     }
 
-    // snip: { map:{ "A": { end:true, "B":{ ... } } } }
+    case TOK_CAT: {
+      let ret = parser(snip.argument, ctx);
+      if (ret.error) return ret;
+
+      let {solve} = ret;
+      ret = {
+        stop_idx: ret.stop_idx,
+
+        start_idx: 0,
+        solve: [],
+        map: {},
+        flag: ret.flag
+      };
+      for (const i in solve) {
+        ret.solve = ret.solve.concat(solve[i]);
+      }
+
+      return ret;
+    };
+
+    case TOK_SUM: {
+      let ret = parser(snip.argument, ctx);
+      if (ret.error) return ret;
+
+      let {solve} = ret;
+      ret = {
+        stop_idx: ret.stop_idx,
+
+        start_idx: 0,
+        solve: "",
+        map: {},
+        flag: ret.flag
+      };
+      for (const i in solve) ret.solve += solve[i];
+
+      return ret;
+    };
+
+    case TOK_OR: {
+      let flag = ctx.flag;
+      for (const i in snip.arguments) {
+        let sub = parser(snip.arguments[i], ctx);
+
+        if (sub.flag == FLAG_G) flag = FLAG_G;
+        else if (flag != FLAG_G && sub.flag == FLAG_N) flag = FLAG_N;
+
+        if (sub.error) continue;
+
+        return Object.assign({}, sub, { flag:flag });
+      }
+
+      return { error:true, flag:flag };
+    };
+
+    case TOK_AND: {
+      let ret = ctx, flag = ctx.flag;
+
+      for (const i in snip.arguments) {
+        ret = parser(snip.arguments[i], ctx);
+
+        if (ret.flag == FLAG_G) flag = FLAG_G;
+        else if (flag != FLAG_G && ret.flag == FLAG_N) flag = FLAG_N;
+
+        if (ret.error) return { error:true, flag:flag };
+      }
+
+      return ret;
+    };
+
+    case TOK_NOT: {
+      let ret = parser(snip.argument, ctx);
+      if (ret.error) return {
+        stop_idx: ctx.start_idx,
+
+        start_idx: 0,
+        solve: [],
+        map: {},
+        flag: ret.flag
+      };
+      else return {
+        error: true,
+        flag: ret.flag
+      };
+    }
+
+    case TOK_REP: {
+
+      let ret = {
+        stop_idx: ctx.start_idx,
+
+        start_idx: 0,
+        solve: [],
+        map: {},
+        flag: ctx.flag
+      };
+
+      let stop_idx;
+      do {
+        stop_idx = ret.stop_idx;
+
+        let sub = parser(snip.argument, {
+          start_idx: stop_idx,
+          solve: ctx.solve,
+          map: ctx.map,
+          flag: ctx.flag
+        });
+
+        if (ret.flag == FLAG_G) ret.flag = FLAG_G;
+        else if (ret.flag != FLAG_G && ret.flag == FLAG_N) ret.flag = FLAG_N;
+
+        if (sub.error) break;
+
+        ret.solve.push(sub.solve);
+
+        ret.stop_idx = sub.stop_idx;
+      }
+      while (stop_idx < ret.stop_idx);
+
+      return ret;
+    };
+
     case TOK_CMP: {
 
       let stop_idx = ctx.start_idx;
@@ -237,370 +227,163 @@ function parser_helper( info, snip, ctx ) {
       let top = { error:true, flag:ctx.flag };
 
       let {map} = snip;
-      while (stop_idx < info.string.length) {
+      while (stop_idx < info.solve.length) {
 
-        const char = info.string[stop_idx];
-        map = map[char];
+        const label = info.solve[stop_idx];
+        map = map[label];
 
         if (map) {
 
-          text += char;
+          text += label;
           ++stop_idx;
 
-          if (map.end) top = {
-            start_idx: ctx.start_idx,
+          if (map.__END_FLAG__) top = {
             stop_idx: stop_idx,
+
+            start_idx: 0,
             solve: text,
-            flag: ctx.flag
+            flag: ctx.flag,
+            map: {}
           };
         }
         else break;
       }
 
       return top;
-    }
 
-    // snip: { text:string }
-    case TOK_TXT: {
-      return {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.start_idx,
-        solve: snip.text,
-        flag: ctx.flag
-      };
-    }
 
-    // snip: {}
-    case TOK_CHR: {
-
-      if (info.string.length >= ctx.start_idx) return {
-        error: true,
-        flag: ctx.flag
-      };
-
-      return {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.start_idx + 1,
-        solve: info.string[ctx.start_idx],
-        flag: ctx.flag
-      };
-    }
-
-    // argument:snip,false
-    case TOK_X: {
-      if (snip.argument) {
-        const ret = parser(info, snip.argument, ctx);
-
-        if (ret.error) return ret;
-        return {
-          start_idx: ctx.start_idx,
-          stop_idx: ctx.stop_idx,
-          solve: [],
-          flag: ret.flag
-        };
-      }
-      else return {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.stop_idx,
-        solve: [],
-        flag: ctx.flag
-      }
-    }
-
-    // arguments:snip[]
-    case TOK_F: {
-      for (const i in snip.arguments) {
-        ctx = parser(info, snip.arguments[i], ctx);
-        if (ctx.error) return ctx;
-      }
-      return ctx;
-    }
-
-    // if:snip, than:snip, else:snip
-    case TOK_IF: {
-      let ret = parser(info, snip.if, ctx);
-
-      if (ret.error) return parser(info, snip.else, ctx);
-      else return parser(info, snip.than, ret);
-    }
-
-    case TOK_ERR: {
-      return { error:true, flag:ctx.flag };
-    }
+    };
+    case TOK_MCH: throw TOK_MCH;
+    case TOK_RNG: throw TOK_RNG;
+    case TOK_TXT: throw TOK_TXT;
+    case TOK_CHR: throw TOK_CHR;
+    case TOK_SUB: throw TOK_SUB;
+    case TOK_X: throw TOK_X;
+    case TOK_F: throw TOK_F;
+    case TOK_IF: throw TOK_IF;
+    case TOK_ERR: throw TOK_ERR;
   }
-};
+}
 
-function parser( info, snip, ctx ) {
-  let stop_idx = ctx.start_idx;
+function parser( snip, ctx ) {
 
-  if (!info.map[ctx.start_idx]) info.map[ctx.start_idx] = {};
-  let state = info.map[ctx.start_idx][snip.id];
+  if (!ctx.map[ctx.start_idx]) ctx.map[ctx.start_idx] = {};
+  let state = ctx.map[ctx.start_idx][snip.id];
 
-  if (!state) state = { error:true, flag:FLAG_N };
+  if (!state) {
+    state = { error:true, flag:FLAG_N };
+    ctx.map[ctx.start_idx][snip.id] = state;
+  }
 
+  let start_idx = ctx.start_idx;
   do {
-    if (!state.error) stop_idx = state.stop_idx;
-
     switch (state.flag) {
       case FLAG_H:
         state = Object.assign({}, state, { flag:FLAG_G });
-        info.map[ctx.start_idx][snip.id] = state;
-      case FLAG_F:
+        ctx.map[ctx.start_idx][snip.id] = state;
       case FLAG_G:
+      case FLAG_F:
         return state;
       case FLAG_N:
         state = Object.assign({}, state, { flag:FLAG_H });
-        info.map[ctx.start_idx][snip.id] = state;
+        ctx.map[ctx.start_idx][snip.id] = state;
         break;
     }
 
-    let ret = parser_helper( info, snip.tok, ctx );
-    state = info.map[ctx.start_idx][snip.id];
+    state = parser_helper(snip, ctx);
+    let state_flag = FLAG_NAMES[!!state.error][state.flag];
 
-    if (ret.error) switch (ret.flag) {
-      case FLAG_N: {
-        if (state.error) {
-          ret = { error:true, flag:FLAG_N };
-          info.map[ctx.start_idx][snip.id] = ret;
+    let temp = ctx.map[ctx.start_idx][snip.id];
+    let temp_flag = FLAG_NAMES[!!temp.error][temp.flag];
 
-          if ( state.flag == FLAG_H ) {
-            return ret;
-          }
-          else {
-            state = ret;
-            break;
-          }
-        }
-        else {
-          state = Object.assign({}, state, { flag:FLAG_F });
-          info.map[ctx.start_idx][snip.id] = state;
+    switch (state_flag) {
+      case FLAG_xN: switch (temp_flag) {
+        case FLAG_xH:
+          return ctx.map[ctx.start_idx][snip.id] = { error:true, flag:FLAG_N };
+        case FLAG_xG:
+          ctx.map[ctx.start_idx][snip.id] = { error:true, flag:FLAG_N };
+          break;
+        case FLAG_aH:
+        case FLAG_aG:
+          state = Object.assign({}, temp, { flag:FLAG_F });
+          ctx.map[ctx.start_idx][snip.id] = state;
           return state;
-        }
-      }
-
-      case FLAG_G: {
-        if (state.error) {
-          ret = { error:true, flag:FLAG_N };
-          info.map[ctx.start_idx][snip.id] = ret;
+      } break;
+      case FLAG_xG: switch (temp_flag) {
+        case FLAG_xG:
+        case FLAG_xH:
+          ctx.map[ctx.start_idx][snip.id] = { error:true, flag:FLAG_N };
           return { error:true, flag:FLAG_G };
-        }
-        else {
-          state = Object.assign({}, state, { flag:FLAG_F });
-          info.map[ctx.start_idx][snip.id] = state;
+        case FLAG_aH:
+        case FLAG_aG:
+          state = Object.assign({}, temp, { flag:FLAG_F });
+          ctx.map[ctx.start_idx][snip.id] = state;
           return state;
-        }
-      }
-
-      case FLAG_F: {
-        state = Object.assign({}, state, { flag:FLAG_F });
-        info.map[ctx.start_idx][snip.id] = state;
-        return state;
-      }
-    }
-    else switch (ret.flag) {
-      case FLAG_N: {
-        ret = Object.assign({}, ret, { flag:FLAG_N });
-        info.map[ctx.start_idx][snip.id] = ret;
-
-        if (state.flag == FLAG_H) {
-          return ret;
-        }
-        else {
-          state = ret;
+      } break;
+      case FLAG_xF: switch (temp_flag) {
+        case FLAG_xG:
+        case FLAG_xH:
+        case FLAG_aH:
+        case FLAG_aG:
+          state = Object.assign({}, temp, { flag:FLAG_F });
+          ctx.map[ctx.start_idx][snip.id] = state;
+          return state;
+      } break;
+      case FLAG_aN: switch (temp_flag) {
+        case FLAG_xH:
+        case FLAG_aH:
+          state = Object.assign({}, state, { flag:FLAG_N });
+          ctx.map[ctx.start_idx][snip.id] = state;
+          return state;
+        case FLAG_xG:
+        case FLAG_aG:
+          state = Object.assign({}, state, { flag:FLAG_N });
+          ctx.map[ctx.start_idx][snip.id] = state;
           break;
-        }
-      }
-
-      case FLAG_G: {
-        ret = Object.assign({}, ret, { flag:FLAG_N });
-        info.map[ctx.start_idx][snip.id] = ret;
-
-        if (state.flag == FLAG_H) {
-          return Object.assign({}, ret, { flag:FLAG_G });
-        }
-        else {
-          state = ret;
+      } break;
+      case FLAG_aG: switch (temp_flag) {
+        case FLAG_xH:
+        case FLAG_aH:
+          state = Object.assign({}, state, { flag:FLAG_N });
+          ctx.map[ctx.start_idx][snip.id] = state;
+          return Object.assign({}, state, { flag:FLAG_G });
+        case FLAG_xG:
+        case FLAG_aG:
+          state = Object.assign({}, state, { flag:FLAG_N });
+          ctx.map[ctx.start_idx][snip.id] = state;
           break;
-        }
-      }
-
-      case FLAG_F: {
-        ret = Object.assign({}, ret, { flag:FLAG_F });
-        info.map[ctx.start_idx][snip.id] = ret;
-        return ret;
-      }
+      } break;
+      case FLAG_aF: switch (temp_flag) {
+        case FLAG_xH:
+        case FLAG_aH:
+        case FLAG_xG:
+        case FLAG_aG:
+          state = Object.assign({}, state, { flag:FLAG_F });
+          ctx.map[ctx.start_idx][snip.id] = state;
+          return state;
+      } break;
     }
   }
-  while (state.error || stop_idx < state.stop_idx);
+  while (start_idx < state.start_idx);
 
-  state = Object.assign({}, state, { flag:FLAG_F });
-  info.map[ctx.start_idx][snip.id] = state;
+  ctx.map[ctx.start_idx][snip.id] = state;
   return state;
 }
 
-function lexparser( string, snip ) {
+function snipper_helper( info, [ root, ...ary ] ) {
 
-  const info = {
-    stack: [],
-    map: {},
-    string: string
-  };
-  const ctx = {
-    start_idx: 0,
-    stop_idx: 0,
-    flag: FLAG_F,
-    solve: []
-  };
-
-  return parser( info, snip, ctx );
 }
 
-function snipper_helper( info, [ root, ...ary ], solve_boolean ) {
-
-  let noarg = solve_boolean;
-  const tok = TOK_NAMES[ root ];
-
-  if (tok == TOK_MCH) {
-    let [text] = ary;
-
-    if (info.name_map[text] != null) {
-      return info.name_map[text];
-    }
-
-    if (info.protosnip_map[text] == null) {
-      throw `bad mch "${text}"`;
-    }
-
-    let id = info.id_list.length;
-    info.name_map[text] = id;
-    info.id_list[id] = null;
-    snip_apply(
-      info, info.id_list, id,
-      info.protosnip_map[text],
-      solve_boolean
-    );
-    return id;
-  }
-
-  let ret = {
-    id: info.id_list.length,
-    tok: tok
-  };
-  info.id_list.push(ret);
-
-  switch (tok) {
-
-    // arguments:snip[]
-    case TOK_ARY:
-    case TOK_OR:
-    case TOK_AND:
-      noarg = false;
-
-    // arguments:snip[],false
-    case TOK_CAT:
-    case TOK_SUM: {
-      if (noarg) break;
-
-      ret.arguments = [];
-      for (const i in ary) {
-        snip_apply(info, ret.arguments, i, ary[i], solve_boolean);
-      }
-      break;
-    }
-
-    // snip, ...string
-    // ...string
-    // path:string[], argument:snip,false
-    case TOK_SUB: {
-      if (noarg) {
-        ret.path = ary;
-        break;
-      }
-      else {
-        ret.path = ary.slice(1);
-      }
-    }
-
-    // argument:snip
-    case TOK_NOT:
-    case TOK_X:
-    case TOK_REP: {
-      snip_apply(info, ret, "argument", ary[0], solve_boolean);
-      break;
-    }
-
-    case TOK_CHR:
-    case TOK_ERR: break;
-
-    // ...string
-    // map:{ "A": { end:true, "B":{ ... } } }
-    case TOK_CMP: {
-
-      ret.map = {};
-      for (const i in ary) {
-        const text = ary[i];
-        let {map} = ret;
-
-        for (const j in text) {
-          const c = text[j];
-
-          if (map[c]) map = map[c];
-          else map = map[c] = {};
-        }
-
-        map.end = true;
-      }
-
-      break;
-    }
-
-    // ...string
-    // text:string
-    case TOK_TXT: {
-      ret.text = "";
-      for (const i in ary) ret.text += ary[i];
-      break;
-    }
-
-    // arguments:snip[]
-    case TOK_F: {
-      ret.arguments = [];
-      for (const i in ary) {
-        snip_apply(info, ret.arguments, i, ary[i], solve_boolean);
-        solve_boolean = true;
-      }
-      break;
-    }
-
-    // snip, snip, snip
-    // snip, snip
-    // if:snip, than:snip, else:snip
-    case TOK_IF: {
-      const [snip_if,snip_than,snip_else] = ary;
-
-      snip_apply(info, ret, "if", snip_if, solve_boolean);
-      snip_apply(info, ret, "than", snip_than, true);
-      snip_apply(info, ret, "else", snip_than || ["err"], solve_boolean);
-
-      break;
-    }
-
-    default: throw `bad tok "${tok}"`
-  }
-
-  return ret.id;
-}
-
-function snip_apply(info, mapto, mapat, string_or_snip, solve_boolean) {
+function snip_apply(info, mapto, mapat, string_or_snip) {
   let ret;
   if (string_or_snip == null) {
     throw `null snip`;
   }
   if (typeof string_or_snip != "string") {
-    ret = snipper_helper( info, string_or_snip, solve_boolean );
+    ret = snipper_helper( info, string_or_snip );
   }
   else if (TOK_NAMES[string_or_snip] != null) {
-    ret = snipper_helper( info, [string_or_snip], solve_boolean );
+    ret = snipper_helper( info, [string_or_snip] );
   }
   else if (info.protosnip_map[string_or_snip] == null) {
     throw `bad string "${string_or_snip}"`;
@@ -611,8 +394,7 @@ function snip_apply(info, mapto, mapat, string_or_snip, solve_boolean) {
     info.id_list[ret] = null;
     snip_apply(
       info, info.id_list, ret,
-      info.protosnip_map[string_or_snip],
-      solve_boolean
+      info.protosnip_map[string_or_snip]
     );
   }
   else ret = info.name_map[string_or_snip];
@@ -669,14 +451,16 @@ const prim_protosnip = {
     "or",
     ["ary","start",["cmp","b"]],
     ["cmp","a"],
-    ["mch","test"],
-  ],
-  test: ["mch","foo"],
-  foo: ["cmp","test"]
+  ]
 };
 
 const prim_snip = snipper(prim_protosnip, "start");
 log("prim_snip",prim_snip);
 
-const parsed_lex = lexparser("    abbb", prim_snip);
-log(parsed_lex.solve)
+const parsed_lex = parser(info, prim_snip, {
+  start_idx: 0,
+  flag: FLAG_F,
+  solve: "abb",
+  map: {}
+});
+log(parsed_lex.solve);

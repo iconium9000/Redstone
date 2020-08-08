@@ -1,5 +1,6 @@
 const {log} = console;
 
+
 const FLAG_N = 0;
 const FLAG_H = 1;
 const FLAG_G = 2;
@@ -70,7 +71,6 @@ function parse_arguments( info, arguments, ctx ) {
       if (ret.stop_idx < sub.stop_idx) ret.stop_idx = sub.stop_idx;
       ret.solve.push(sub.solve);
     }
-
     return ret;
   }
   else return {
@@ -84,12 +84,12 @@ function parse_arguments( info, arguments, ctx ) {
 function parser_helper( info, snip, ctx ) {
   switch (snip.tok) {
 
-    // arguments:snip[],null
+    // arguments:snip[]
     case TOK_ARY: {
       return parse_arguments( info, snip.arguments, ctx );
     }
 
-    // arguments:snip[],null
+    // arguments:snip[],false
     case TOK_CAT: {
 
       let ret = parse_arguments( info, snip.arguments, ctx );
@@ -105,7 +105,7 @@ function parser_helper( info, snip, ctx ) {
       return ret;
     }
 
-    // arguments:snip[],null
+    // arguments:snip[],false
     case TOK_SUM: {
 
       let ret = parse_arguments( info, snip.arguments, ctx );
@@ -121,11 +121,11 @@ function parser_helper( info, snip, ctx ) {
       return ret;
     }
 
-    // path:string[], argument:snip,null
+    // path:string[], argument:snip,false
     case TOK_SUB: {
 
-      const ret;
-      if (ret.argument) {
+      let ret;
+      if (ctx.argument) {
         ret = parser(info, ret.argument, ctx);
         if (ret.error) return ret;
       }
@@ -194,27 +194,12 @@ function parser_helper( info, snip, ctx ) {
       };
     }
 
-    // arguments:snip[]
+    // argument:snip
     case TOK_NOT: {
+      const ret = parser(info, snip.argument, ctx);
 
-      let flag = FLAG_F;
-
-      for (const i in snip.arguments) {
-
-        let sub = parser(info, snip.arguments[i], ctx);
-
-        if ( sub.flag == FLAG_G ) flag = FLAG_G;
-        else if ( flag != FLAG_G && sub.flag == FLAG_N ) flag = FLAG_N;
-
-        if (!sub.error) return { error:true, flag:flag };
-      }
-
-      return {
-        start_idx: ctx.start_idx,
-        stop_idx: ctx.stop_idx,
-        solve: ctx.solve,
-        flag: flag
-      };
+      if (ret.error) return ctx;
+      return { error:true, flag:ret.flag };
     }
 
     // argument:snip
@@ -225,10 +210,9 @@ function parser_helper( info, snip, ctx ) {
         stop_idx: ctx.start_idx,
         solve: [],
         flag:ctx.flag
-      });
+      };
 
       while (true) {
-
         let sub = parser(info, snip.argument, {
           start_idx: ret.stop_idx,
           stop_idx: ret.stop_idx,
@@ -302,7 +286,7 @@ function parser_helper( info, snip, ctx ) {
       };
     }
 
-    // argument:snip,null
+    // argument:snip,false
     case TOK_X: {
       if (snip.argument) {
         const ret = parser(info, snip.argument, ctx);
@@ -332,15 +316,12 @@ function parser_helper( info, snip, ctx ) {
       return ctx;
     }
 
-    // arguments:[snip,snip,snip],[snip,snip]
+    // if:snip, than:snip, else:snip
     case TOK_IF: {
-      let ret = parser(info, snip[0], ctx);
+      let ret = parser(info, snip.if, ctx);
 
-      if (ret.error) {
-        if (ret[2]) return parser(info, snip[2], ctx);
-        else return { error:true, flag:ret.flag };
-      }
-      else return parser(info, snip[1], ret);
+      if (ret.error) return parser(info, snip.else, ctx);
+      else return parser(info, snip.than, ret);
     }
 
     case TOK_ERR: {
@@ -474,194 +455,224 @@ function lexparser( string, snip ) {
   return parser( info, snip, ctx );
 }
 
-function snipper_helper( builds, [root, ...ary] ) {
-  switch ( TOK_NAMES[root] ) {
-    // snip: { arguments:[...snip] }
-    case TOK_ARY: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_ARY,
-        arguments: []
-      };
-      for (const i in ary) {
-        builds.push([snip.arguments,i,snipper_helper(builds,ary[i])]);
-      }
-      return snip;
+function snipper_helper( info, [ root, ...ary ], solve_boolean ) {
+
+  let noarg = solve_boolean;
+  const tok = TOK_NAMES[ root ];
+
+  if (tok == TOK_MCH) {
+    let [text] = ary;
+
+    if (info.name_map[text] != null) {
+      return info.name_map[text];
     }
-    // snip: { arguments:[...snip] }
-    case TOK_CAT: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_CAT,
-        arguments: []
-      };
-      for (const i in ary) {
-        builds.push([snip.arguments,i,snipper_helper(builds,ary[i])]);
-      }
-      return snip;
+
+    if (info.protosnip_map[text] == null) {
+      throw `bad mch "${text}"`;
     }
-    // snip: { argument }
+
+    let id = info.id_list.length;
+    info.name_map[text] = id;
+    info.id_list[id] = null;
+    snip_apply(
+      info, info.id_list, id,
+      info.protosnip_map[text],
+      solve_boolean
+    );
+    return id;
+  }
+
+  let ret = {
+    id: info.id_list.length,
+    tok: tok
+  };
+  info.id_list.push(ret);
+
+  switch (tok) {
+
+    // arguments:snip[]
+    case TOK_ARY:
+    case TOK_OR:
+    case TOK_AND:
+      noarg = false;
+
+    // arguments:snip[],false
+    case TOK_CAT:
     case TOK_SUM: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_SUM
-      };
-      builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
-      return snip;
-    }
-    // snip: { arguments:[...snip] }
-    case TOK_OR: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_OR,
-        arguments: []
-      };
+      if (noarg) break;
+
+      ret.arguments = [];
       for (const i in ary) {
-        builds.push([snip.arguments,i,snipper_helper(builds,ary[i])]);
+        snip_apply(info, ret.arguments, i, ary[i], solve_boolean);
       }
-      return snip;
+      break;
     }
-    // snip: { arguments:[...snip] }
-    case TOK_AND: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_AND,
-        arguments: []
-      };
-      for (const i in ary) {
-        builds.push([snip.arguments,i,snipper_helper(builds,ary[i])]);
+
+    // snip, ...string
+    // ...string
+    // path:string[], argument:snip,false
+    case TOK_SUB: {
+      if (noarg) {
+        ret.path = ary;
+        break;
       }
-      return snip;
-    }
-    // snip: { arguments:[...snip] }
-    case TOK_NOT: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_NOT,
-        arguments: []
-      };
-      for (const i in ary) {
-        builds.push([snip.arguments,i,snipper_helper(builds,ary[i])]);
+      else {
+        ret.path = ary.slice(1);
       }
-      return snip;
     }
-    // snip: { argument:snip }
+
+    // argument:snip
+    case TOK_NOT:
+    case TOK_X:
     case TOK_REP: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_REP,
-      };
-      builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
-      return snip;
+      snip_apply(info, ret, "argument", ary[0], solve_boolean);
+      break;
     }
-    // snip: { map:{ "A": map{ ... } } }
+
+    case TOK_CHR:
+    case TOK_ERR: break;
+
+    // ...string
+    // map:{ "A": { end:true, "B":{ ... } } }
     case TOK_CMP: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_CMP,
-        map: {}
-      };
+
+      ret.map = {};
       for (const i in ary) {
         const text = ary[i];
-        let {map} = snip;
+        let {map} = ret;
+
         for (const j in text) {
-          const char = text[j];
-          if (!map[char]) map[char] = {};
-          map = map[char];
+          const c = text[j];
+
+          if (map[c]) map = map[c];
+          else map = map[c] = {};
         }
+
         map.end = true;
       }
-      return snip;
-    }
-    // snip: { text:string }
-    case TOK_MCH: {
-      return ary[0];
-    }
-    // snip: { low:char, high:char }
-    case TOK_RNG: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_CMP,
-        map: {}
-      };
-      let low = ary[0].charCodeAt(0);
-      let high = ary[1].charCodeAt(0);
 
-      while (low <= high) {
-        snip.map[String.fromCharCode(low++)] = { end:true };
-      }
-      return snip;
+      break;
     }
-    // snip: { text:string }
+
+    // ...string
+    // text:string
     case TOK_TXT: {
-      let text = "";
+      ret.text = "";
+      for (const i in ary) ret.text += ary[i];
+      break;
+    }
+
+    // arguments:snip[]
+    case TOK_F: {
+      ret.arguments = [];
       for (const i in ary) {
-        text += ary[i];
+        snip_apply(info, ret.arguments, i, ary[i], solve_boolean);
+        solve_boolean = true;
       }
-      return {
-        id: ++builds.idx,
-        tok: TOK_TXT,
-        text: text
-      };
+      break;
     }
-    // snip: {}
-    case TOK_CHR: {
-      return {
-        id: ++builds.idx,
-        tok: TOK_CHR
-      };
+
+    // snip, snip, snip
+    // snip, snip
+    // if:snip, than:snip, else:snip
+    case TOK_IF: {
+      const [snip_if,snip_than,snip_else] = ary;
+
+      snip_apply(info, ret, "if", snip_if, solve_boolean);
+      snip_apply(info, ret, "than", snip_than, true);
+      snip_apply(info, ret, "else", snip_than || ["err"], solve_boolean);
+
+      break;
     }
-    // snip: { argument, path }
-    case TOK_SUB: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_SUB,
-        path: ary.slice(1)
-      };
-      builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
-      return snip;
-    }
-    // snip: { argument:snip }
-    case TOK_X: {
-      const snip = {
-        id: ++builds.idx,
-        tok: TOK_X,
-      };
-      builds.push([snip,"argument",snipper_helper(builds,ary[0])]);
-      return snip;
-    }
+
+    default: throw `bad tok "${tok}"`
   }
+
+  return ret.id;
 }
 
-function snipper( protosnip, startname ) {
-  const snips = {};
-  const builds = [];
-  builds.idx = 0;
+function snip_apply(info, mapto, mapat, string_or_snip, solve_boolean) {
+  let ret;
+  if (string_or_snip == null) {
+    throw `null snip`;
+  }
+  if (typeof string_or_snip != "string") {
+    ret = snipper_helper( info, string_or_snip, solve_boolean );
+  }
+  else if (TOK_NAMES[string_or_snip] != null) {
+    ret = snipper_helper( info, [string_or_snip], solve_boolean );
+  }
+  else if (info.protosnip_map[string_or_snip] == null) {
+    throw `bad string "${string_or_snip}"`;
+  }
+  else if (info.name_map[string_or_snip] == null) {
+    ret = info.id_list.length;
+    info.name_map[string_or_snip] = ret;
+    info.id_list[ret] = null;
+    snip_apply(
+      info, info.id_list, ret,
+      info.protosnip_map[string_or_snip],
+      solve_boolean
+    );
+  }
+  else ret = info.name_map[string_or_snip];
 
-  for (const i in protosnip) {
-    snips[i] = snipper_helper( builds, protosnip[i] );
+  if (!info.build_list[ret]) info.build_list[ret] = [];
+  info.build_list[ret].push([mapto,mapat,ret]);
+
+  return ret;
+}
+
+function buildsnip( info, id ) {
+
+  const snip = info.id_list[id];
+  if (!snip) return;
+
+  for (const i in info.build_list[id]) {
+    const [ mapto, mapat ] = info.build_list[id][i];
+    if (mapto == info.id_list && mapto[mapat] == null) {
+      mapto[mapat] = snip;
+      buildsnip(info, mapat);
+    }
+    else mapto[mapat] = snip;
   }
 
-  for (let i = 0; i < builds.length; ++i) {
-    const [ map,label,snip_or_match ] = builds[i];
-    if (typeof snip_or_match == "string") {
-      map[ label ] = snips[ snip_or_match ];
-    }
-    else {
-      map[ label ] = snip_or_match;
+  info.build_list[id] = [];
+}
+
+function snipper( protosnip_map, startname ) {
+
+  const info = {
+    protosnip_map: protosnip_map,
+    name_map: {},
+    id_list: [],
+    build_list: {}
+  };
+
+  snip_apply( info, info, "root", startname, false );
+
+  for (const id in info.build_list) buildsnip( info, id );
+
+  for (const id in info.build_list) {
+    if (info.build_list[id].length > 0) {
+      throw "recursive definition error";
     }
   }
 
-  return snips[ startname ];
+  if (!info.root) throw "no root found";
+  return info.root;
 }
 
 const prim_protosnip = {
+  // start: [ "ary" ]
   start: [
-    "cat",
-    ["x",["rep",["cmp"," "]]],
+    "or",
+    ["ary","start",["cmp","b"]],
     ["cmp","a"],
-    ["rep",["cmp","b"]]
-  ]
+    ["mch","test"],
+  ],
+  test: ["mch","foo"],
+  foo: ["cmp","test"]
 };
 
 const prim_snip = snipper(prim_protosnip, "start");

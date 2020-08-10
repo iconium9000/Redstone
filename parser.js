@@ -574,8 +574,10 @@ function snipper_helper( info, [ root, ...ary ] ) {
   info.id_list[ret.id] = ret;
 
   switch (tok) {
-    case TOK_OR:
+    case TOK_OR: {
+
       info.or_list.push(ret);
+    };
 
     case TOK_ARY:
     case TOK_AND:

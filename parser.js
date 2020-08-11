@@ -831,20 +831,52 @@ function snipper( protosnip_map, startname ) {
 }
 
 const prim_protosnip = {
-  start: ["rep",["f",[
-    "ary",
-    ["sum",["rep",["if",["cmp","k"],"err","chr"]]],
-    ["cmp","k"]
-  ],["sub","0"]]]
+  // start: ["rep",["f",[
+  //   "ary",
+  //   ["sum",["rep",["if",["cmp","k"],"err","chr"]]],
+  //   ["cmp","k"]
+  // ],["sub","0"]]]
+
+  pad:[
+    "or",
+    ["cmp"," ","\n","\t"],
+    [
+      "ary",
+      ["cmp","//"],
+      ["rep",["and",["not",["cmp","\n"]],["chr"]]],
+      ["cmp","\n"]
+    ],
+    [
+      "ary",
+      ["cmp","/*"],
+      ["rep",["and",["not",["cmp","*/"]],["chr"]]],
+      ["cmp","*/"]
+    ]
+  ],
+  special:["cmp"," ","\n","\t",":",";",".","!","*","+","|","&","#","]","}",")"],
+  word:["sum",["cat",["ary",["ary","char"],["rep",[
+    "or",
+    ["f",["ary",["cmp","$"],["chr"]],["sub","1"]],
+    ["and",["not",["mch","special"]],["chr"]],
+  ]]]]],
+  text:["f",[
+    "ary", ["cmp","\""],
+    ["sum",["rep",[
+      "or",
+      ["f",["ary",["cmp","$"],["chr"]],["sub","1"]],
+      ["and",["not",["cmp","\""]],["chr"]]
+    ]]],
+    ["cmp","\""]
+  ],]
 };
 
-const prim_snip = snipper(prim_protosnip, "start");
+const prim_snip = snipper(prim_protosnip, "pad*");
 log("prim_snip",prim_snip);
 
 const parsed_lex = parser(prim_snip, {
   start_idx: 0,
   flag: FLAG_F,
-  solve: ["a","b","k","f","k"],
+  solve: "  // this was a comment \n  ",
   map: {}
 });
 log(parsed_lex);

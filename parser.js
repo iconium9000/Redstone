@@ -47,6 +47,7 @@ const TOK_X = 13;
 const TOK_F = 14;
 const TOK_IF = 15;
 const TOK_ERR = 16;
+const TOK_IDX = 17;
 
 const TOK_NAMES = {
   ary: TOK_ARY,
@@ -65,7 +66,8 @@ const TOK_NAMES = {
   x: TOK_X,
   f: TOK_F,
   if: TOK_IF,
-  err: TOK_ERR
+  err: TOK_ERR,
+  idx: TOK_IDX
 };
 
 function parser_helper( snip, ctx ) {
@@ -394,6 +396,18 @@ function parser_helper( snip, ctx ) {
 
       return { error:true, flag:ctx.flag };
     };
+
+    case TOK_IDX: {
+
+      return {
+        stop_idx: ctx.start_idx,
+
+        start_idx: 0,
+        solve: ctx.start_idx,
+        map: {},
+        flag: ctx.flag
+      };
+    }
   }
 }
 
@@ -834,20 +848,167 @@ function snipper( protosnip_map, startname ) {
 }
 
 const prim_protosnip = {
-  start: [
+  // start: [
+  //   "or",
+  //   ["ary",["mch","start"],["cmp","b"]],
+  //   ["cmp","a"]
+  // ]
+
+  "pad": [
     "or",
-    ["ary",["mch","start"],["cmp","b"]],
-    ["cmp","a"]
+    ["cmp"," ","\n","\t"],
+    ["ary",["cmp","\//"],["rep",["if",["cmp","\n"],"err","chr"]],["cmp","\n"]],
+    ["ary",["cmp","\/*"],["rep",["if",["cmp","*/"],"err","chr"]],["cmp","*/"]],
+  ],
+  "pad*": ["rep","pad"],
+
+  "special": [
+    "cmp"," ","\n","\t","\"",":",";",".",
+    "!","*","+","|","&","#","]","}",")"
+  ],
+
+  "word": ["sum", ["cat", [
+    "ary",
+    ["ary","chr"],
+    ["rep", [
+      "or",
+      ["f",["ary",["cmp","$"],"chr"],["sub","1"]],
+      ["if",["mch","special"],"err","chr"]
+    ]]
+  ]]],
+
+  "text": ["f",[
+    "ary",
+    ["cmp","\""],
+    ["sum",["rep",[
+      "or",
+      ["f",["ary",["cmp","$"],"chr"],["sub","1"]],
+      ["if",["cmp","\""],"err","chr"]
+    ]]],
+    ["cmp","\""]
+  ], ["sub","1"]],
+
+  "char": [
+    "f",
+    ["cmp","@"],
+    ["ary",["txt","chr"]]
+  ],
+
+  "match": [
+    "f",
+    ["ary",["cmp","#"],["mch","word"]],
+    ["ary",["txt","mch"],["sub","1"]]
+  ],
+
+  "compare": [
+    "f",
+    ["ary",["cmp","$"],["mch","word"]],
+    ["ary",["txt","cmp"],["sub","1"]]
+  ],
+
+  "_sub": [
+    "f", [
+      "ary",
+      ["cmp","."],
+      ["mch","word"]
+    ],
+    ["sub","1"]
+  ],
+  "sub": ["or", ["cat", [
+    "ary",
+    ["ary",["txt","sub"]],
+    ["or",["cat",[
+      "ary",
+      ["ary",["mch","_sub"]],
+      ["rep",["mch","_sub"]]
+    ]], ["f",["cmp","."],"ary"]]
+  ]]],
+
+  "list": [
+    "or", "char", "match", "text", "compare", "sub", [
+      "f", [
+        "or", [
+          "ary",
+          ["cmp","("],
+          ["mch","pad*"],
+          ["mch","or"],
+          ["mch","pad*"],
+          ["cmp",")"]
+        ], [
+          "ary",
+          ["cmp","{"],
+          ["mch","pad*"],
+          ["mch","or"],
+          ["mch","pad*"],
+          ["cmp","}"]
+        ]
+      ], ["sub","2"]
+    ], [
+      "f", [
+        "ary",
+        ["cmp","["],
+        ["mch","pad*"],
+        ["rep",["f",["ary",["mch","or"],["mch","pad*"]],["sub","0"]]],
+        ["cmp","]"]
+      ], ["cat",[
+        "ary",
+        ["ary",["txt","ary"]],
+        ["sub","2"]
+      ]]
+    ]
+  ],
+
+  "postfix": [
+    "or", [
+      "f",
+      ["ary",["mch","postfix"],["cmp","*"]],
+      ["ary",["txt","rep"],["sub","0"]]
+    ], [
+      "f",
+      ["ary",["mch","postfix"],["cmp","+"]],
+      [
+        "ary",
+        ["txt","cat"],
+        ["ary",["txt","ary"],["sub","0"]]
+        ["ary",["txt","rep"],["sub","0"]]
+      ]
+    ], [
+      "f", [
+        "ary",
+        ["mch","postfix"],
+        ["cat",[
+          "ary",
+          ["ary",["mch","_sub"]],
+          ["rep",["mch","_sub"]]
+        ]]
+      ], [
+        "ary",
+        ["cmp","f"],
+        ["sub","0"],
+        ["cat",[
+          "ary",
+          ["ary",["txt","sub"]],
+          ["sub","1"]
+        ]]
+      ],
+      ["mch","list"]
+    ]
   ]
+
+
+
+
+
 };
 
-const prim_snip = snipper(prim_protosnip, "start");
-log("prim_snip",prim_snip);
+const prim_snip = snipper( prim_protosnip, "list" );
+log( "prim_snip", prim_snip );
 
 const parsed_lex = parser(prim_snip, {
   start_idx: 0,
   flag: FLAG_F,
-  solve: "abbb",
+  solve: `@`,
+  // solve: "abbb",
   map: {}
 });
 log(parsed_lex);

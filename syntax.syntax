@@ -23,9 +23,9 @@
   [ #postfix [ $. #word ].1+ ] => [ "f" .0 *[ ["sub"] .1 ] ] |
   #list;
 #prefix :=
-  [ $! #postfix ] => [ "not" .1 ] |
-  [ $+ #postfix ] => [ "sum" .1 ] |
-  [ $* #postfix ] => [ "cat" .1 ] |
+  [ $! #prefix ] => [ "not" .1 ] |
+  [ $+ #prefix ] => [ "sum" .1 ] |
+  [ $* #prefix ] => [ "cat" .1 ] |
   #postfix;
 #fun := *[["f" #prefix] (#pad* $=> #pad* #prefix).3+] | #prefix;
 #and := [#and #pad* $& #pad* #fun] => ["and" .0 .4] | #fun;

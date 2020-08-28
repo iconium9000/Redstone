@@ -1,199 +1,160 @@
-FLAG_N = 0
-FLAG_H = 1
-FLAG_G = 2
-FLAG_F = 3
+class ParserMaker:
 
-FLAG_xN = 0
-FLAG_aN = 1
-FLAG_xH = 2
-FLAG_aH = 3
-FLAG_xG = 4
-FLAG_aG = 5
-FLAG_xF = 6
-FLAG_aF = 7
+    class Blip:
 
-FLAG_NAMES = {
-    "true": [
-        FLAG_xN, # FLAG_N
-        FLAG_xH, # FLAG_H
-        FLAG_xG, # FLAG_G
-        FLAG_xF  # FLAG_F
-    ],
-    "false": [
-        FLAG_aN, # FLAG_N
-        FLAG_aH, # FLAG_H
-        FLAG_aG, # FLAG_G
-        FLAG_aF  # FLAG_F
-    ]
-}
+        def __init__(self):
 
-TOK_ARY = 0
-TOK_CAT = 1
-TOK_SUM = 2
-TOK_OR = 3
-TOK_AND = 4
-TOK_NOT = 5
-TOK_REP = 6
-TOK_CMP = 7
-TOK_MCH = 8
-TOK_RNG = 9
-TOK_TXT = 10
-TOK_CHR = 11
-TOK_SUB = 12
-TOK_X = 13
-TOK_F = 14
-TOK_IF = 15
-TOK_ERR = 16
+            self.next = None
+            self.error = None
+            self.down = None
 
-TOK_ARGS_LIST = {
-    TOK_OR: True,
-    TOK_ARY: True,
-    TOK_AND: True,
-    TOK_F: True
-}
+            self.tok = None
+            self.args = []
 
-TOK_ARG_LIST = {
-    TOK_CAT: True,
-    TOK_SUM: True,
-    TOK_NOT: True,
-    TOK_REP: True,
-    TOK_X: True
-}
+        def __str__(self):
 
-TOK_NAMES = {
-    "ary": TOK_ARY,
-    "cat": TOK_CAT,
-    "sum": TOK_SUM,
-    "or": TOK_OR,
-    "and": TOK_AND,
-    "not": TOK_NOT,
-    "rep": TOK_REP,
-    "cmp": TOK_CMP,
-    "mch": TOK_MCH,
-    "rng": TOK_RNG,
-    "txt": TOK_TXT,
-    "chr": TOK_CHR,
-    "sub": TOK_SUB,
-    "x": TOK_X,
-    "f": TOK_F,
-    "if": TOK_IF,
-    "err": TOK_ERR
-}
+            return "string"
 
-prim_protosnip = {
-    "start": [
-        "or",
-        ["ary",["mch","start"],["cmp","b"]],
-        ["cmp","a"]
-    ]
-}
+        def setBlip(self, blip):
 
-def snipper_helper( info, snip ):
+            pass # TODO
 
-    tok = TOK_NAMES[snip[0]]
-    ary = snip[1:]
+        def clearNext(self):
 
-    if tok is TOK_MCH:
+            pass # TODO
 
-        label = ary[0]
+        def setNext(self, blipnext):
 
-        if info["name_map"].get(label) is None:
+            return blipnext # TODO
 
-            id = len(info["id_list"])
-            info["name_map"][label] = id
-            info["id_list"].append(None)
-            snip_apply(
-                info, info["id_list"], id,
-                info["protosnip_map"][label]
-            )
+        def setDown(self, blipdown):
 
-    ret = {
-        "tok": tok,
-        "id": len( info.id_list )
-    }
+            return blipdown # TODO
 
-    if tok is TOK_OR:
+        def setError(self, bliperror):
 
-        info["or_list"].append(ret)
+            return bliperror # TODO
+        
+        def copy(self):
 
-    if TOK_ARGS_LIST.get(tok) is not None:
+            return self
 
-        ret["arguments"] = []
+    def getBlip(self, blip):
 
-        i = 0
-        for arg in ary:
+        label = str(blip)
+        blipid = self.blipmap.get(label)
 
-            snip_apply( info, ret["arguments"], i++, arg )
+        if blipid is None:
 
-    elif TOK_ARG_LIST.get(tok) is not None:
+            blipid = len(self.bliplist)
+            blip.id = blipid
+            self.bliplist.append(blip)
+            self.blipmap[label] = blipid
 
-        snip_apply( info, ret, "argument", ary[0] )
+            return blip.copy()
 
-    elif tok == TOK_CMP:
+        else:
 
-        ret["map"] = {}
-        for text in ary:
+            return self.bliplist[blipid].copy()
+    
+    def tokBlip(self, tok):
 
-            map = ret["map"]
-            for c in text:
+        blip = self.Blip()
+        blip.tok = tok
+        
+        return self.getBlip(blip)
 
-                if map.get(c) is None:
+    def snip_f(self, snips, args):
 
-                    map[c] = {}
-                map = map[c]
+        ret = self.snipBlip(snips[0], args)
+        
+        for snip in snips[1:]:
 
-            map["__END_FLAG__"] = True
+            ret.setDown(self.snipBlip(snip, args))
+            
+        return ret
 
-    elif tok == TOK_RNG:
+    def snip_or(self, snips, args):
+
+        ret = self.snipBlip(snips[0], args)
+
+        for snip in snips[1:]:
+
+            ret.setError(self.snipBlip(snip, args))
+        
+        return ret
+    
+    def snip_and(self, snips, args):
+
+        ret = self.snipBlip(snips[0], args)
+
+        for snip in snips[1:]:
+
+            ret.clearNext()
+            ret.setNext(self.snipBlip(snip, args))
+
+        return ret
+    
+    def snip_if(self, snips, args):
+
+        ret = self.snipBlip(snips[0], args)
+        ret.setError(self.snipBlip(snips[2], args))
+
+        ret.clearNext()
+        ret.setNext(self.snipBlip(snips[1], args))
+
+        return ret
+
+    def snip_rep(self, snips, args):
+
+        # TODO snips [snip]
+        # TODO snips [snip, len]
+        # TODO snips [snip, min, max]
+
+        ret = self.tokBlip("newary")
+
+        repblip = self.snipBlip(snips[0], args)
+        repblip.setError(self.tokBlip("endary"))
+        repblip.setDown(self.tokBlip("pushary"))
+        repblip.setNext(repblip)
+
+        ret.setNext(repblip)
+
+        return ret
+
+    def __init__(self, startname, snipmap):
+
+        self.snipmap = snipmap
+        self.blipmap = {}
+        self.bliplist = []
+
+        self.snipfuns = {
+            "f": self.snip_f,
+            "if": self.snip_if,
+            "or": self.snip_or,
+            "and": self.snip_and,
+        }
+
+        self.blipid = self.snipBlip(self.snipmap[startname], [])
+
+    def snipswitch(self, tok, snips, args):
+
+        return self.Blip() # TODO
+
+    def snipBlip(self, snip, args):
+
+        return self.Blip() # TODO
+
+def Parser(startname, snipmap):
+
+    pm = ParserMaker(startname, snipmap)
+
+    return ["test"]
 
 
+test = Parser("start", {
+    "start": ["f", ["cmp","hello"]]
+})
 
-    return ret.id
-
-def snip_apply(info, mapto, mapat, string_or_snip):
-
-    ret = None
-
-    if string_or_snip is None:
-
-        raise NameError( "null snip" )
-    elif not isinstance( string_or_snip, str ):
-
-        ret = snipper_helper( info, string_or_snip )
-    elif TOK_NAMES.get( string_or_snip ) is not None:
-
-        ret = snipper_helper( info, [string_or_snip] )
-    elif info["protosnip_map"].get( string_or_snip ) is None:
-
-        raise NameError( "bad string " + str( string_or_snip ) )
-    elif info["name_map"].get( string_or_snip ) is None:
-
-        ret = len(info["id_list"])
-        info["name_map"][ string_or_snip ] = ret
-        info["id_list"].append(None)
-        snip_apply(
-            info, info["id_list"], ret,
-            info["protosnip_map"][string_or_snip]
-        )
-    else:
-        ret = info["name_map"][string_or_snip]
-
-    if info["build_list"].get(ret) is None:
-        info["build_list"][ret] = []
-    info["build_list"][ret].append([ mapto,mapat,ret ])
-
-    return ret
-
-def snipper( protosnip_map, startname ):
-
-    info = {
-        "protosnip_map": protosnip_map,
-        "or_list": [],
-        "name_map": {},
-        "id_list": [],
-        "build_list": {}
-    }
-
-    snip_apply( info, info, "root", startname );
-
-prim_snip = snipper(prim_protosnip, "start")
+    
+print("test")

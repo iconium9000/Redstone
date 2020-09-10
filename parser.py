@@ -1,3 +1,5 @@
+import copy as Copy
+
 def error(errorName):
 
     raise NameError(errorName)
@@ -6,82 +8,180 @@ class Blip:
 
     def __init__(self):
 
+        self.id = None
+        self.static = False
         self.next = None
         self.error = None
-        self.down = None
         self.inside = None
+        self.down = None
 
-        # self.args = []
+    def resetNext(self, blipnext):
 
-        # self.cmp = None
-        # self.range = False
-        # self.low = 0
-        # self.high = 0
+        self.static = True
 
-    def setInside(self, blip):
+        if self.error is not None:
 
-        error("setInside")
+            self.error.resetNext(blipnext)
 
-        pass # TODO
+        if self.next is None:
 
-    def clearNext(self):
+            self.next = blipnext
 
-        error("clearNext")
+        else:
 
-        pass # TODO
+            self.next.resetNext(blipnext)
 
     def setNext(self, blipnext):
 
-        error("setNext")
+        if self.error is not None:
 
-        return blipnext # TODO
+            self.error.setNext(blipnext)
+
+        if self.next is None:
+
+            self.next = blipnext
+
+        else:
+
+            self.next.setNext(blipnext)
 
     def setDown(self, blipdown):
 
-        error("setDown")
+        if self.down is None:
 
-        return blipdown # TODO
+            self.down = blipdown
+        
+        else:
+
+            self.down.setDown(blipdown)
 
     def setError(self, bliperror):
 
-        error("setError")
+        if self.error is None:
 
-        return bliperror # TODO
+            self.error = bliperror
+
+        else:
+
+            self.error.setError(bliperror)
     
     def copy(self):
 
-        error("copy")
+        return self.assign(self.__class__())
 
-        return self
+    def assign(self, copy):
 
-class EmptyBlip(Blip):
+        copy.static = self.static
 
-    def __init__(self, tok):
+        if self.next is not None:
 
-        self.tok = tok
+            copy.next = self.next.copy()
 
+        if self.error is not None:
+
+            copy.error = self.error.copy()
+
+        if self.inside is not None:
+
+            copy.inside = self.inside.copy()
+
+        if self.down is not None:
+
+            copy.down = self.down.copy()
+
+        return copy
+
+    def setId(self, pm):
+
+        error("setId")
+
+    def __str__(self):
+
+        error("str")
+
+        return "str"
+
+class AryBlip(Blip):
+
+    blips = []
+
+class IdxBlip(Blip):
+
+    def test(self):
+
+        pass
+
+class EndBlip(Blip):
+
+    def test(self):
+
+        pass
+
+class ErrBlip(Blip):
+
+    def test(self):
+
+        pass
+
+class NxtBlip(Blip):
+
+    def test(self):
+
+        pass
+
+class RecBlip(Blip):
+
+    def __init__(self, label):
+        Blip.__init__(self)
+
+        self.label = label
+        self.inside = None
+
+    def __str__(self):
+
+        return str(["rec",self.label])
+    
+    def copy(self):
+
+        return self.assign(RecBlip(self.label))
+
+class RepBlip(Blip):
+
+    def __init__(self, inside, low, high):
+        Blip.__init__(self)
+
+        self.inside = inside
+        self.low = low
+        self.high = high
+
+    def copy(self):
+
+        return self.assign(RepBlip(None, self.low, self.high))
+        
 class InsideBlip(Blip):
 
     def __init__(self, inside):
+        Blip.__init__(self)
 
         self.inside = inside
 
-class repBlip(Blip):
+    def copy(self):
 
-    def __init__(self, inside):
+        return self.assign(self.__class__(None))
 
-        
-class sumBlip(Blip):
+class SumBlip(InsideBlip):
 
-    def __init__(self, inside):
+    def test(self):
 
-        
-class catBlip(Blip):
+        pass
+     
+class CatBlip(InsideBlip):
 
-    def __init__(self, inside):
+    def test(self):
 
-        
-class notBlip(Blip):
+        pass
+    
+class NotBlip(InsideBlip):
 
     def test(self):
 
@@ -90,16 +190,38 @@ class notBlip(Blip):
 class CmpBlip(Blip):
 
     def __init__(self):
+        Blip.__init__(self)
 
         self.cmp = {}
+
+    def copy(self):
+
+        copy = CmpBlip()
+        copy.cmp = Copy.deepcopy(self.cmp)
+        return self.assign(copy)
 
 class SubBlip(Blip):
 
     def __init__(self, path):
+        Blip.__init__(self)
 
         self.path = path
 
+    def copy(self):
+
+        return self.assign(SubBlip(self.path))
+
 class ParserMaker:
+
+    def snip_ary(self, snips, args):
+
+        ret = AryBlip()
+
+        for snip in snips:
+
+            ret.blips.append(self.snipBlip(snip, args))
+
+        return ret
 
     def snip_f(self, snips, args):
 
@@ -127,8 +249,7 @@ class ParserMaker:
 
         for snip in snips[1:]:
 
-            ret.clearNext()
-            ret.setNext(self.snipBlip(snip, args))
+            ret.resetNext(self.snipBlip(snip, args))
 
         return ret
     
@@ -137,57 +258,55 @@ class ParserMaker:
         ret = self.snipBlip(snips[0], args)
         ret.setError(self.snipBlip(snips[2], args))
 
-        ret.clearNext()
-        ret.setNext(self.snipBlip(snips[1], args))
+        ret.resetNext(self.snipBlip(snips[1], args))
 
         return ret
 
     def snip_rep(self, snips, args):
 
         sniplen = len(snips)
-        ret = InsideBlip("rep",self.snipBlip(snips[0], args))
+        low = 0
+        high = float('inf')
 
         if sniplen == 2:
 
-            self.range = True
-            self.low = snips[1]
-            self.high = snips[1]
+            low = snips[1]
+            high = snips[1]
 
         elif sniplen > 2:
 
-            self.range = True
-            self.low = snips[1]
-            self.high = snips[2]
-        
-        return ret
+            low = snips[1]
+            high = snips[2]
+
+        return RepBlip(self.snipBlip(snips[0], args), low, high)
 
     def snip_sum(self, snips, args):
 
-        return InsideBlip("sum", self.snipBlip(snips[0], args))
+        return SumBlip(self.snipBlip(snips[0], args))
 
     def snip_cat(self, snips, args):
 
-        return InsideBlip("cat", self.snipBlip(snips[0], args))
+        return CatBlip(self.snipBlip(snips[0], args))
 
     def snip_not(self, snips, args):
 
-        return InsideBlip("not", self.snipBlip(snips[0], args))
+        return NotBlip(self.snipBlip(snips[0], args))
 
     def snip_idx(self, snips, args):
 
-        return EmptyBlip("idx")
+        return IdxBlip()
 
     def snip_end(self, snips, args):
 
-        return EmptyBlip("end")
+        return EndBlip()
 
     def snip_err(self, snips, args):
 
-        return EmptyBlip("err")
+        return ErrBlip()
 
     def snip_nxt(self, snips, args):
 
-        return EmptyBlip("nxt")
+        return NxtBlip()
 
     def snip_cmp(self, snips, args):
 
@@ -228,7 +347,7 @@ class ParserMaker:
 
             newargs.append(self.snipBlip(snip, args))
 
-        return self.snipBlip(snip[0], newargs)
+        return self.snipBlip(self.snipmap[snips[0]], newargs)
 
     def snip_arg(self, snips, args):
 
@@ -242,9 +361,12 @@ class ParserMaker:
 
         self.snipmap = snipmap
         self.blipmap = {}
-        self.bliplist = []
+        self.bidmap = {}
+        self.bidlist = []
 
         self.snipfuns = {
+            "ary": self.snip_ary,
+
             "f": self.snip_f,
             "if": self.snip_if,
             "or": self.snip_or,
@@ -268,20 +390,24 @@ class ParserMaker:
             "sub": self.snip_sub
         }
 
-        self.blipid = self.snipBlip(self.snipmap[startname], [])
+        blip = self.snipBlip(self.snipmap[startname], [])
+        blip.setId(self)
 
     def snipSwitch(self, tok, snips, args):
 
-        blip = self.snipfuns[tok](snips, args)
-        label = str(blip)
+        label = str([tok] + [snips] + [args])
+        blip = self.blipmap.get(label)
 
-        oldblip = self.blipmap.get(label)
-        if oldblip is None:
+        if blip is None:
 
+            blip = RecBlip(label)
             self.blipmap[label] = blip
-            return blip
-        
-        return oldblip.copy()
+            nextblip = self.snipfuns[tok](snips, args)
+            self.blipmap[label] = nextblip
+
+            return nextblip.copy()
+
+        return blip.copy()
 
     def snipBlip(self, snip, args):
 
@@ -299,18 +425,20 @@ class ParserMaker:
 
             return self.snipSwitch(mappedsnip, [], args)
         
-        return self.snipSwitch("txt", [mappedsnip], args) 
+        return self.snipSwitch("txt", [snip], args)
 
 
 def Parser(startname, snipmap):
 
     pm = ParserMaker(startname, snipmap)
 
+    error(pm)
+
     return ["test"]
 
 
-test = Parser("start", {
-    "start": ["f", ["cmp","hello"]]
+test = Parser("a", {
+    "a": ["or",["ary",["mch","a"],["cmp","b"]],["cmp","c"]]
 })
 
     

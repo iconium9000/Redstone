@@ -4,66 +4,81 @@ def error(errorName):
 
     raise NameError(errorName)
 
+class Solve:
+
+    retidx = 0
+
+    startidx = 0
+    save = {}
+    flag = False
+
+    err = False
+
+    def __init__(self, string):
+
+        self.string = string
+
+    def setFlag(self, flag):
+
+        self.flag = flag
+        return self
+
+    def copy(self):
+
+        copy = self.__class__(self.string)
+        copy.endidx = self.endidx
+        copy.startidx = self.startidx
+        copy.flag = self.flag
+        copy.err = self.err
+
+        return copy
+    
+    def error(self):
+
+        error = Solve("")
+        error.err = True
+        error.flag = self.flag
+        return error
+
 class Blip:
 
     def __init__(self):
 
         self.id = None
-        self.static = False
         self.next = None
         self.error = None
         self.inside = None
         self.down = None
 
-    def resetNext(self, blipnext):
-
-        self.static = True
-
-        if self.error is not None:
-
-            self.error.resetNext(blipnext)
-
-        if self.next is None:
-
-            self.next = blipnext
-
-        else:
-
-            self.next.resetNext(blipnext)
-
     def setNext(self, blipnext):
 
-        if self.error is not None:
+        blip = self
 
-            self.error.setNext(blipnext)
+        while blip.next is not None:
 
-        if self.next is None:
+            blip = blip.next
 
-            self.next = blipnext
-
-        else:
-
-            self.next.setNext(blipnext)
+        blip.next = blipnext
 
     def setDown(self, blipdown):
 
-        if self.down is None:
+        blip = self
 
-            self.down = blipdown
-        
-        else:
+        while blip.down is not None:
 
-            self.down.setDown(blipdown)
+            blip = blip.down
+
+        blip.down = blipdown
 
     def setError(self, bliperror):
 
-        if self.error is None:
+        blip = self
 
-            self.error = bliperror
+        while blip.error is not None:
 
-        else:
+            blip = blip.error
 
-            self.error.setError(bliperror)
+        blip.error = bliperror
     
     def copy(self):
 
@@ -71,7 +86,7 @@ class Blip:
 
     def assign(self, copy):
 
-        copy.static = self.static
+        copy.id = self.id
 
         if self.next is not None:
 
@@ -91,59 +106,114 @@ class Blip:
 
         return copy
 
-    def setId(self, pm):
-
-        error("setId")
-
     def __str__(self):
 
-        error("str")
+        return str(self.id) + str(self.next) + str(self.error) + str(self.inside) + str(self.down) + ";"
 
-        return "str"
+    def callerr(self, solve):
+
+        if self.error is None:
+
+            return solve.error()
+
+        else:
+
+            return self.error.solve(solve)        
+
+    def solve(self, solve):
+
+        ret = solve
+
+        if solve.err is False and self.down is not None:
+
+            ret = self.down.solve(solve)
+
+        if ret.err is False and self.next is not None:
+
+            ret = self.next.solve(solve.setFlag(ret.flag))
+
+        if ret.err is False:
+
+            return ret
+
+        if self.error is not None:
+
+            # continue solving this tomorrow
+
 
 class AryBlip(Blip):
 
     blips = []
 
+    def __str__(self):
+        
+        ret = "ary"
+
+        for blip in self.blips:
+
+            ret += str(blip)
+
+        return ret + "." + Blip.__str__(self)
+
+    def solve(self, solve):
+
+        ary = []
+
+        arysolve = solve.copy()
+        for blip in self.blips:
+
+            sub = blip.solve(solve)
+            arysolve.setFlag(sub.flag)
+
+            if sub.err:
+
+                return self.callerr(solve.setFlag(arysolve.flag))
+
+            ary.append(sub.string)
+            arysolve.startidx = sub.retidx
+
+        downsolve = Blip.solve(self, Solve(ary).setFlag(arysolve.flag))
+
+
+
 class IdxBlip(Blip):
 
-    def test(self):
-
-        pass
+    def __str__(self):
+        return "idx" + Blip.__str__(self)
 
 class EndBlip(Blip):
 
-    def test(self):
-
-        pass
+    def __str__(self):
+        return "end" + Blip.__str__(self)
 
 class ErrBlip(Blip):
 
-    def test(self):
-
-        pass
+    def __str__(self):
+        return "err" + Blip.__str__(self)
 
 class NxtBlip(Blip):
 
-    def test(self):
-
-        pass
+    def __str__(self):
+        return "nxt" + Blip.__str__(self)
 
 class RecBlip(Blip):
 
-    def __init__(self, label):
+    def __init__(self, bid):
+        
         Blip.__init__(self)
-
-        self.label = label
-        self.inside = None
+        self.id = bid
+        self.copies = [self]
 
     def __str__(self):
 
-        return str(["rec",self.label])
+        return "rec" + str(self.id) + str(self.next) + str(self.error) + str(self.down) + ";"
     
     def copy(self):
 
-        return self.assign(RecBlip(self.label))
+        copy = self.assign(RecBlip(self.id))
+        copy.copies = self.copies
+        self.copies.append(copy)
+        return copy
 
 class RepBlip(Blip):
 
@@ -153,6 +223,10 @@ class RepBlip(Blip):
         self.inside = inside
         self.low = low
         self.high = high
+
+    def __str__(self):
+
+        return "rep" + str(self.low) + "," + str(self.high) + Blip.__str__(self)
 
     def copy(self):
 
@@ -171,21 +245,34 @@ class InsideBlip(Blip):
 
 class SumBlip(InsideBlip):
 
-    def test(self):
+    def __str__(self):
 
-        pass
+        return "sum" + Blip.__str__(self)
      
 class CatBlip(InsideBlip):
 
-    def test(self):
+    def __str__(self):
 
-        pass
+        return "cat" + Blip.__str__(self)
     
 class NotBlip(InsideBlip):
 
-    def test(self):
+    def __str__(self):
 
-        pass
+        return "not" + Blip.__str__(self)
+
+class IntBlip(InsideBlip):
+
+    def __str__(self):
+
+        return "int" + Blip.__str__(self)
+
+class StrBlip(InsideBlip):
+
+    def __str__(self):
+
+        return "str" + Blip.__str__(self)
+
 
 class CmpBlip(Blip):
 
@@ -193,6 +280,41 @@ class CmpBlip(Blip):
         Blip.__init__(self)
 
         self.cmp = {}
+
+    def __str__(self):
+
+        return "cmp" + str(self.cmp) + Blip.__str__(self)
+    
+    def setError(self, bliperror):
+
+        if isinstance(bliperror, CmpBlip):
+
+            self.cmp = self.mergeCmp(self.cmp, bliperror.cmp)
+
+        else:
+
+            Blip.setError(self, bliperror)
+    
+    def mergeCmp(self, a, b):
+
+        if a == True or b == True:
+            return True
+
+        if a is None:
+            a = {}
+
+        if b is None:
+            b = {}
+
+        c = {}
+        for i in a:
+            c[i] = self.mergeCmp(a[i], b.get(i))
+
+        for i in b:
+            if c.get(i) is None:
+                c[i] = self.mergeCmp(a.get(i), b[i])
+
+        return c
 
     def copy(self):
 
@@ -207,9 +329,28 @@ class SubBlip(Blip):
 
         self.path = path
 
+    def __str__(self):
+        
+        return "sub" + str(self.path) + Blip.__str__(self)
+
     def copy(self):
 
         return self.assign(SubBlip(self.path))
+
+class TxtBlip(Blip):
+
+    def __init__(self, txt):
+        Blip.__init__(self)
+
+        self.txt = txt
+
+    def __str__(self):
+        
+        return "txt" + self.txt + Blip.__str__(self)
+
+    def copy(self):
+
+        return self.assign(TxtBlip(self.txt))
 
 class ParserMaker:
 
@@ -249,7 +390,7 @@ class ParserMaker:
 
         for snip in snips[1:]:
 
-            ret.resetNext(self.snipBlip(snip, args))
+            ret.setNext(self.snipBlip(snip, args))
 
         return ret
     
@@ -258,7 +399,7 @@ class ParserMaker:
         ret = self.snipBlip(snips[0], args)
         ret.setError(self.snipBlip(snips[2], args))
 
-        ret.resetNext(self.snipBlip(snips[1], args))
+        ret.setNext(self.snipBlip(snips[1], args))
 
         return ret
 
@@ -291,6 +432,14 @@ class ParserMaker:
     def snip_not(self, snips, args):
 
         return NotBlip(self.snipBlip(snips[0], args))
+
+    def snip_int(self, snips, args):
+
+        return IntBlip(self.snipBlip(snips[0], args))
+
+    def snip_str(self, snips, args):
+
+        return StrBlip(self.snipBlip(snips[0], args))
 
     def snip_idx(self, snips, args):
 
@@ -357,6 +506,10 @@ class ParserMaker:
 
         return SubBlip(snips)
 
+    def snip_txt(self, snips, args):
+
+        return TxtBlip(snips[0])
+
     def __init__(self, startname, snipmap):
 
         self.snipmap = snipmap
@@ -376,8 +529,10 @@ class ParserMaker:
             "not": self.snip_not,
             "sum": self.snip_sum,
             "cat": self.snip_cat,
+            "int": self.snip_int,
+            "str": self.snip_str,
 
-            "end": self.snip_err,
+            "end": self.snip_end,
             "err": self.snip_err,
             "nxt": self.snip_nxt,
             "idx": self.snip_idx,
@@ -387,11 +542,11 @@ class ParserMaker:
 
             "mch": self.snip_mch,
             "arg": self.snip_arg,
-            "sub": self.snip_sub
+            "sub": self.snip_sub,
+            "txt": self.snip_txt
         }
 
-        blip = self.snipBlip(self.snipmap[startname], [])
-        blip.setId(self)
+        self.blip = self.snipBlip(self.snipmap[startname], [])
 
     def snipSwitch(self, tok, snips, args):
 
@@ -400,10 +555,29 @@ class ParserMaker:
 
         if blip is None:
 
-            blip = RecBlip(label)
+            blip = RecBlip(len(self.bidlist))
+            self.bidlist.append(blip)
+            self.bidmap[str(blip)] = blip.id
+
             self.blipmap[label] = blip
             nextblip = self.snipfuns[tok](snips, args)
             self.blipmap[label] = nextblip
+            self.bidlist[blip.id] = nextblip
+
+            if nextblip.id is None:
+
+                nextlabel = str(nextblip)
+                nextblip.id = self.bidmap.get(nextlabel)
+
+                if nextblip.id is None:
+
+                    self.bidmap[nextlabel] = blip.id
+                    nextblip.id = blip.id
+    
+            for copy in blip.copies:
+                
+                copy.id = nextblip.id
+                copy.inside = nextblip
 
             return nextblip.copy()
 
@@ -430,16 +604,18 @@ class ParserMaker:
 
 def Parser(startname, snipmap):
 
-    pm = ParserMaker(startname, snipmap)
-
-    error(pm)
-
-    return ["test"]
-
+    return ParserMaker(startname, snipmap).blip.solve
 
 test = Parser("a", {
-    "a": ["or",["ary",["mch","a"],["cmp","b"]],["cmp","c"]]
+    "a": [
+        "or",
+        ["ary",["mch","a"],["cmp","b"]],
+        ["cmp","c"],
+        ["cmp","ender","end"]
+    ]
 })
+
+test(Solve("cbbb"))
 
     
 print("test")

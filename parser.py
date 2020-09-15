@@ -14,9 +14,11 @@ class Solve:
 
     err = False
 
-    def __init__(self, string):
+    def __init__(self, string, flag, retidx):
 
         self.string = string
+        self.flag = flag
+        self.retidx = retidx
 
     def setFlag(self, flag):
 
@@ -25,19 +27,16 @@ class Solve:
 
     def copy(self):
 
-        copy = self.__class__(self.string)
-        copy.endidx = self.endidx
+        copy = self.__class__(self.string, self.flag, self.retidx)
         copy.startidx = self.startidx
-        copy.flag = self.flag
+        copy.save = self.save
         copy.err = self.err
 
         return copy
     
     def error(self):
 
-        error = Solve("")
         error.err = True
-        error.flag = self.flag
         return error
 
 class Blip:
@@ -47,7 +46,6 @@ class Blip:
         self.id = None
         self.next = None
         self.error = None
-        self.inside = None
         self.down = None
 
     def setNext(self, blipnext):
@@ -96,10 +94,6 @@ class Blip:
 
             copy.error = self.error.copy()
 
-        if self.inside is not None:
-
-            copy.inside = self.inside.copy()
-
         if self.down is not None:
 
             copy.down = self.down.copy()
@@ -108,7 +102,7 @@ class Blip:
 
     def __str__(self):
 
-        return str(self.id) + str(self.next) + str(self.error) + str(self.inside) + str(self.down) + ";"
+        return str(self.id) + str(self.next) + str(self.error) + str(self.down) + ";"
 
     def callerr(self, solve):
 
@@ -120,9 +114,15 @@ class Blip:
 
             return self.error.solve(solve)        
 
+    def deepsolve(self, solve):
+
+        return solve
+
     def solve(self, solve):
 
-        ret = solve
+        error("solve")
+
+        ret = self.deepsolve(solve)
 
         if solve.err is False and self.down is not None:
 
@@ -132,14 +132,11 @@ class Blip:
 
             ret = self.next.solve(solve.setFlag(ret.flag))
 
-        if ret.err is False:
+        if ret.err is False or self.error is None:
 
             return ret
-
-        if self.error is not None:
-
-            # continue solving this tomorrow
-
+        
+        return self.error.solve(solve.setFlag(ret.flag))
 
 class AryBlip(Blip):
 
@@ -155,14 +152,14 @@ class AryBlip(Blip):
 
         return ret + "." + Blip.__str__(self)
 
-    def solve(self, solve):
+    def deepsolve(self, solve):
 
         ary = []
 
         arysolve = solve.copy()
         for blip in self.blips:
 
-            sub = blip.solve(solve)
+            sub = blip.solve(arysolve.copy())
             arysolve.setFlag(sub.flag)
 
             if sub.err:
@@ -172,29 +169,57 @@ class AryBlip(Blip):
             ary.append(sub.string)
             arysolve.startidx = sub.retidx
 
-        downsolve = Blip.solve(self, Solve(ary).setFlag(arysolve.flag))
-
-
+        return Solve(ary, arysolve.flag, arysolve.startidx)
 
 class IdxBlip(Blip):
 
     def __str__(self):
+
         return "idx" + Blip.__str__(self)
+    
+    def deepsolve(self, solve):
+
+        return Solve(solve.startidx, solve.flag, solve.startidx)
 
 class EndBlip(Blip):
 
     def __str__(self):
+
         return "end" + Blip.__str__(self)
+    
+    def deepsolve(self, solve):
+        
+        if len(solve.string) <= solve.startidx:
+
+            return Solve("", solve.flag, solve.startidx)
+
+        else:
+
+            return solve.error()
 
 class ErrBlip(Blip):
 
     def __str__(self):
+
         return "err" + Blip.__str__(self)
+
+    def deepsolve(self, solve):
+
+        return solve.error()
 
 class NxtBlip(Blip):
 
     def __str__(self):
+
         return "nxt" + Blip.__str__(self)
+
+    def deepsolve(self, solve):
+
+        if len(solve.string) <= solve.startidx:
+
+            return solve.error()
+
+        return Solve(solve.string[solve.startidx], solve.flag, solve.startidx + 1)
 
 class RecBlip(Blip):
 
@@ -215,23 +240,10 @@ class RecBlip(Blip):
         self.copies.append(copy)
         return copy
 
-class RepBlip(Blip):
+    def deepsolve(self, solve):
 
-    def __init__(self, inside, low, high):
-        Blip.__init__(self)
+        error("rec deepsolve")
 
-        self.inside = inside
-        self.low = low
-        self.high = high
-
-    def __str__(self):
-
-        return "rep" + str(self.low) + "," + str(self.high) + Blip.__str__(self)
-
-    def copy(self):
-
-        return self.assign(RepBlip(None, self.low, self.high))
-        
 class InsideBlip(Blip):
 
     def __init__(self, inside):
@@ -239,40 +251,147 @@ class InsideBlip(Blip):
 
         self.inside = inside
 
+    def __str__(self):
+
+        return "inside" + str(self.inside) + Blip.__str__(self)
+
     def copy(self):
 
-        return self.assign(self.__class__(None))
+        return self.assign(self.__class__(self.inside.copy()))
+
+class RepBlip(InsideBlip):
+
+    def __init__(self, inside, low, high):
+        InsideBlip.__init__(self, inside)
+
+        self.low = low
+        self.high = high
+
+    def __str__(self):
+
+        return "rep" + str(self.low) + "," + str(self.high) + InsideBlip.__str__(self)
+
+    def copy(self):
+
+        return self.assign(RepBlip(None, self.low, self.high))
+
+    def deepsolve(self, solve):
+
+        ary = []
+        arysolve = solve.copy()
+
+        while True:
+
+            sub = self.inside.solve(arysolve.copy())
+            arysolve.setFlag(sub.flag)
+
+            if sub.retidx == arysolve.startidx or sub.err:
+
+                break
+            
+            ary.append(sub.string)
+            arysolve.startidx = sub.retidx
+
+        size = len(ary)
+        if self.low <= size and size < self.high:
+
+            return Solve(ary, arysolve.flag, arysolve.startidx)
+
+        return solve.setFlag(arysolve.flag).error()
 
 class SumBlip(InsideBlip):
 
     def __str__(self):
 
-        return "sum" + Blip.__str__(self)
+        return "sum" + InsideBlip.__str__(self)
+
+    def deepsolve(self, solve):
+
+        sub = self.inside.solve(solve.copy())
+
+        if sub.err:
+
+            return sub
+
+        ret = ""
+
+        for substring in sub.string:
+
+            ret += substring
+
+        return Solve(ret, sub.flag, sub.retidx)
      
 class CatBlip(InsideBlip):
 
     def __str__(self):
 
-        return "cat" + Blip.__str__(self)
+        return "cat" + InsideBlip.__str__(self)
+
+    def deepsolve(self, solve):
+
+        sub = self.inside.solve(solve.copy())
+
+        if sub.err:
+
+            return sub
+
+        ret = []
+
+        for substring in sub.string:
+
+            ret += substring
+
+        return Solve(ret, sub.flag, sub.retidx)
     
 class NotBlip(InsideBlip):
 
     def __str__(self):
 
-        return "not" + Blip.__str__(self)
+        return "not" + InsideBlip.__str__(self)
+
+    def deepsolve(self, solve):
+
+        startidx = solve.startidx
+        sub = self.inside.solve(solve)
+        ret = Solve("", sub.flag, startidx)
+
+        if sub.err:
+
+            return ret
+        
+        return ret.error()
 
 class IntBlip(InsideBlip):
 
     def __str__(self):
 
-        return "int" + Blip.__str__(self)
+        return "int" + InsideBlip.__str__(self)
+    
+    def deepsolve(self, solve):
+
+        sub = self.inside.solve(solve)
+
+        if sub.err:
+
+            return sub
+
+        return Solve(int(sub.string), sub.flag, sub.retidx)
 
 class StrBlip(InsideBlip):
 
     def __str__(self):
 
-        return "str" + Blip.__str__(self)
+        return "str" + InsideBlip.__str__(self)
 
+    def deepsolve(self, solve):
+
+        sub = self.inside.solve(solve)
+
+        if sub.err:
+
+            return sub
+
+        return Solve(str(sub.string), sub.flag, sub.retidx)
 
 class CmpBlip(Blip):
 
@@ -322,6 +441,34 @@ class CmpBlip(Blip):
         copy.cmp = Copy.deepcopy(self.cmp)
         return self.assign(copy)
 
+    def deepsolve(self, solve):
+
+        cmpmap = self.cmp
+        string = ""
+        startidx = solve.startidx
+
+        while startidx < len(solve.string):
+
+            label = solve.string[startidx]
+            cmpmap = cmpmap.get(label)
+
+            if cmpmap is None:
+
+                break
+
+            string += label
+            startidx += 1
+
+            if cmpmap.get("__ENDCMP__") is True:
+
+                ret = Solve(string, solve.flag, startidx)
+        
+        if ret is None:
+
+            return solve.error()
+
+        return ret
+
 class SubBlip(Blip):
 
     def __init__(self, path):
@@ -336,6 +483,22 @@ class SubBlip(Blip):
     def copy(self):
 
         return self.assign(SubBlip(self.path))
+    
+    def deepsolve(self, solve):
+
+        string = solve.string
+
+        for label in solve.path:
+
+            try:
+                
+                string = string[label]
+
+            except:
+                
+                return solve.error()
+
+        return Solve(string, solve.flag, solve.startidx)
 
 class TxtBlip(Blip):
 
@@ -351,6 +514,10 @@ class TxtBlip(Blip):
     def copy(self):
 
         return self.assign(TxtBlip(self.txt))
+
+    def deepsolve(self, solve):
+
+        return Solve(self.txt, solve.flag, solve.startidx)
 
 class ParserMaker:
 
@@ -604,7 +771,13 @@ class ParserMaker:
 
 def Parser(startname, snipmap):
 
-    return ParserMaker(startname, snipmap).blip.solve
+    solve = ParserMaker(startname, snipmap).blip.solve
+
+    def ret(string):
+
+        return solve(Solve(string, False, 0))
+
+    return ret
 
 test = Parser("a", {
     "a": [
@@ -615,7 +788,7 @@ test = Parser("a", {
     ]
 })
 
-test(Solve("cbbb"))
+test("cbbb")
 
     
 print("test")

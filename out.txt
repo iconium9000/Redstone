@@ -1,0 +1,2 @@
+0 ary[rec0(NoneNoneNone)ary[rec0(NoneNoneNone)cmp{'b': {'__ENDCMP__': True}}(NoneNoneNone)](Nonecmp{'a': {'__ENDCMP__': True}}(NoneNoneNone)None)](Noneary[rec0(NoneNoneNone)cmp{'b': {'__ENDCMP__': True}}(NoneNoneNone)](Nonecmp{'a': {'__ENDCMP__': True}}(NoneNoneNone)None)None)
+[[[[[[['a', 'b'], 'b'], 'a'], 'b'], 'b'], 'a'], 'b']

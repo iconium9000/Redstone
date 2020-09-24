@@ -3,19 +3,26 @@
 #special :=
   $  | $\n | $\t | $" |
   $: | $; | $. |
-  $! | $* | $+ |
+  $! | $* | $+ | $- |
   $| | $& | $# |
   $[ | ${ | $( |
   $] | $} | $);
-#word := +*[ [ @ ] ( [ $$ @ ].1 | (!#special & @) )* ];
-#text := [$" +( [$$ @].1 | (!$" & @) )* $"].1;
-#char := $@ => ["chr"];
-#match := [ $# #word ] => [ "mch" .1 ];
-#compare := [ $$ #word ] => [ "cmp" .1 ];
-#sub := *[ ["sub"] ( [ $. #word ].1+ | $. => [] ) ];
+
+#err := $err => ["err"];
+#idx := $idx => ["idx"];
+#char := $@ => ["nxt"];
+#word := +*[ [ @ ] ( [ $$ @ ].1 | (#special ? err : @) )* ];
+#num := ["num" [$% #word].1];
+#match := +[$# => ["mch] +[[#word] [pad* $- pad* #list].3*];
+#text := ["txt" [$" +( [$$ @].1 | ($" ? err : @) )* $"].1];
+#compare := [$$ => "cmp" #word];
+#sub := *[ ["sub"] (
+  ([ $. #num ] => ["int", .1])+ |
+  $. => []
+) ];
 
 #list :=
-  #char | #match | #text | #compare | #sub |
+  #err | #idx | #char | #match | #text | #compare | #sub |
   { [ $( #pad* #or #pad* $) ] | [ ${ #pad* #or #pad* $} ] }.2 |
   [ $[ #pad* [ #or #pad* ].0* $] ] => *[ ["ary"] .2 ];
 #postfix :=

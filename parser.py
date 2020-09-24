@@ -6,12 +6,14 @@ def error(errorName):
 
 class Solve:
 
+    stack = []
+
     def __init__(self, ret, retidx):
 
         self.startidx = 0
         self.save = {}
         self.err = False
-        self.rec = False
+        self.rec = {}
 
         self.ret = ret
         self.retidx = retidx
@@ -22,7 +24,7 @@ class Solve:
         copy.startidx = self.startidx
         copy.save = self.save
         copy.err = self.err
-        copy.rec = self.rec
+        copy.rec.update(self.rec)
 
         return copy
     
@@ -42,27 +44,33 @@ class Blip:
 
     def setNext(self, blipnext):
 
-        while self.next is not None:
+        if self.next is None:
 
-            self = self.next
+            self.next = blipnext
 
-        self.next = blipnext
+        else:
+
+            self.next.setNext(blipnext)
 
     def setDown(self, blipdown):
 
-        while self.down is not None:
+        if self.down is None:
 
-            self = self.down
+            self.down = blipdown
 
-        self.down = blipdown
+        else:
+
+            self.down.setDown(blipdown)
 
     def setError(self, bliperror):
 
-        while self.error is not None:
+        if self.error is None:
 
-            self = self.error
+            self.error = bliperror
 
-        self.error = bliperror
+        else:
+
+            self.error.setError(bliperror)
     
     def _copy(self):
 
@@ -102,6 +110,11 @@ class Blip:
 
     def solve(self, solve):
 
+        upstack = Solve.stack
+        Solve.stack = []
+        stacker = [self, solve, Solve.stack]
+        upstack.append(stacker)
+
         savemap = solve.save.get(solve.startidx)
         
         if savemap is None:
@@ -111,35 +124,50 @@ class Blip:
         
         ret = savemap.get(self.id)
 
-        if ret is not None and ret.rec is False:
+        if ret is None or bool(ret.rec) is True:
 
-            return ret.copy()
+            ret = self._solve(solve)
 
-        ret = self._solve(solve)
+            if ret.err is False and self.down is not None:
 
-        if ret.err is False and self.down is not None:
+                retrec = ret.rec
+                retidx = ret.retidx
+                ret = self.down.solve(solve)
+                ret.retidx = retidx
+                ret.rec.update(retrec)
 
-            retrec = ret.rec
-            retidx = ret.retidx
-            ret = self.down.solve(solve)
-            ret.retidx = retidx
-            ret.rec = ret.rec or retrec
+            if ret.err is False and self.next is not None:
 
-        if ret.err is False and self.next is not None:
+                retrec = ret.rec
+                ret = self.next.solve(solve)
+                ret.rec.update(retrec)
 
-            retrec = ret.rec
-            ret = self.next.solve(solve)
-            ret.rec = ret.rec or retrec
+            if ret.err is True and self.error is not None:
 
-        if ret.err is True and self.error is not None:
+                retrec = ret.rec
+                ret = self.error.solve(solve)
+                ret.rec.update(retrec)
 
-            retrec = ret.rec
-            ret = self.error.solve(solve)
-            ret.rec = ret.rec or retrec
+            savemap[self.id] = ret
 
-        savemap[self.id] = ret
+        stacker.append(ret)
+        Solve.stack = upstack
 
-        return ret
+        return ret.copy()
+
+    def _deep(self, deepmap):
+
+        pass
+
+    def deep(self, deepmap):
+
+        self._deep(deepmap)
+
+        if self.next is not None: self.next.deep(deepmap)
+        if self.error is not None: self.error.deep(deepmap)
+        if self.down is not None: self.down.deep(deepmap)
+
+        return self.id
 
 class AryBlip(Blip):
 
@@ -147,6 +175,12 @@ class AryBlip(Blip):
         Blip.__init__(self)
 
         self.blips = []
+
+    def _deep(self, deepmap):
+
+        for blip in self.blips:
+            
+            blip.deep(deepmap)
 
     def _str(self):
         
@@ -177,7 +211,7 @@ class AryBlip(Blip):
             sub = solve.copy()
             sub.startidx = ret.retidx
             sub = blip.solve(sub)
-            ret.rec = ret.rec or sub.rec
+            ret.rec.update(sub.rec)
 
             if sub.err:
 
@@ -185,6 +219,59 @@ class AryBlip(Blip):
 
             ret.ret.append(sub.ret)
             ret.retidx = sub.retidx
+
+        return ret
+
+class SubBlip(AryBlip):
+
+    def _str(self):
+        
+        ret = "sub["
+
+        for blip in self.blips:
+
+            ret += str(blip)
+
+        return ret + "]"
+
+    def setDown(self, blipdown):
+
+        if self.down is None:
+
+            flag = blipdown.next or blipdown.error or blipdown.down
+
+            if flag is None and isinstance(blipdown, SubBlip):
+
+                self.blips += blipdown.blips
+
+            else:
+
+                AryBlip.setDown(self, blipdown)
+
+        else:
+
+            self.down.setDown(blipdown)
+
+    def _solve(self, solve):
+
+        ret = Solve(solve.ret, solve.retidx)
+
+        try:
+
+            for blip in self.blips:
+
+                sub = blip.solve(solve)
+                ret.rec.update(sub.rec)
+                
+                if sub.err:
+
+                    raise Exception()
+                
+                ret.ret = ret.ret[sub.ret]
+
+        except:
+            
+            ret.error = True
 
         return ret
 
@@ -251,6 +338,13 @@ class RecBlip(Blip):
         self.copies = [self]
         self.inside = None
 
+    def _deep(self, deepmap):
+
+        if deepmap.get(self.id) is None:
+
+            deepmap[self.id] = str(self.inside)
+            self.inside.deep(deepmap)
+
     def _str(self):
 
         return "rec" + str(self.id)
@@ -268,43 +362,28 @@ class RecBlip(Blip):
 
         ret = savemap.get(self.id)
 
-        if ret is not None:
+        if ret is not None and ret.rec.get(self.id) is True:
 
             return ret.copy()
 
-        ret = Solve("", solve.startidx).error()
-        ret.rec = True
+        ret = Solve("rec", solve.startidx).error()
+        ret.rec[self.id] = True
 
         while True:
 
             savemap[self.id] = ret
             sub = self.inside.solve(solve)
+            ret.rec.update(sub.rec)
 
             if sub.err or sub.retidx <= ret.retidx:
 
-                ret.rec = False
+                if ret.rec.get(self.id) is not None:
+                    
+                    del ret.rec[self.id]
+
                 return ret
 
             ret = sub
-
-class InsideBlip(Blip):
-
-    def __init__(self, inside):
-        Blip.__init__(self)
-
-        self.inside = inside
-
-    def _str(self):
-
-        return "inside" + str(self.inside)
-
-    def _copy(self):
-
-        return InsideBlip(self.inside.copy())
-
-    def _solve(self, solve):
-
-        return self.inside.solve(solve)
 
 class IfBlip(Blip):
 
@@ -314,6 +393,12 @@ class IfBlip(Blip):
         self.ifcheck = ifcheck
         self.ifnoerr = ifnoerr
         self.iferr = iferr
+
+    def _deep(self, deepmap):
+
+        self.ifcheck.deep(deepmap)
+        self.ifnoerr.deep(deepmap)
+        self.iferr.deep(deepmap)
 
     def _str(self):
 
@@ -344,6 +429,12 @@ class RepBlip(Blip):
         self.low = low
         self.high = high
 
+    def _deep(self, deepmap):
+
+        self.rep.deep(deepmap)
+        self.low.deep(deepmap)
+        self.high.deep(deepmap)
+
     def _str(self):
 
         return "rep" + str(self.rep) + str(self.low) + "," + str(self.high)
@@ -361,7 +452,7 @@ class RepBlip(Blip):
             sub = solve.copy()
             sub.startidx = ret.retidx
             sub = self.rep.solve(sub)
-            ret.rec = ret.rec or sub.rec
+            ret.rec.update(sub.rec)
 
             if sub.retidx <= ret.retidx or sub.err:
 
@@ -370,13 +461,49 @@ class RepBlip(Blip):
             ret.ret.append(sub.ret)
             ret.retidx = sub.retidx
 
+
+        low = self.low.solve(solve)
+        high = self.high.solve(solve)
+        ret.rec.update(low.rec)
+        ret.rec.update(high.rec)
+
         size = len(ret.ret)
 
-        if self.low <= size and size < self.high:
+        try:
 
-            return ret
+            if low.err or high.err or low.ret > size: pass
 
-        return ret.error()
+            elif high.ret < 0 or size < high.ret:
+
+                return ret
+        
+        except: pass
+
+        ret.err = True
+        return ret
+
+class InsideBlip(Blip):
+
+    def __init__(self, inside):
+        Blip.__init__(self)
+
+        self.inside = inside
+
+    def _deep(self, deepmap):
+
+        self.inside.deep(deepmap)
+
+    def _str(self):
+
+        return "inside" + str(self.inside)
+
+    def _copy(self):
+
+        return InsideBlip(self.inside.copy())
+
+    def _solve(self, solve):
+
+        return self.inside.solve(solve)
 
 class SumBlip(InsideBlip):
 
@@ -433,7 +560,7 @@ class NotBlip(InsideBlip):
     def _solve(self, solve):
 
         sub = self.inside.solve(solve)
-        ret = Solve("", sub.retidx)
+        ret = Solve("not", sub.retidx)
         ret.rec = sub.rec
         
         if sub.err:
@@ -491,13 +618,21 @@ class CmpBlip(Blip):
     
     def setError(self, bliperror):
 
-        if isinstance(bliperror, CmpBlip):
+        if self.error is None:
 
-            self.cmp = CmpBlip.merge(self.cmp, bliperror.cmp)
+            flag = bliperror.next or bliperror.error or bliperror.down
 
+            if flag is None and isinstance(bliperror, CmpBlip):
+
+                self.cmp = CmpBlip.merge(self.cmp, bliperror.cmp)
+
+            else:
+
+                Blip.setError(self, bliperror)
+        
         else:
 
-            Blip.setError(self, bliperror)
+            self.error.setError(bliperror)
     
     def merge(self, other):
 
@@ -539,7 +674,7 @@ class CmpBlip(Blip):
         cmpmap = self.cmp
         cmpstr = ""
         startidx = solve.startidx
-        ret = Solve("", solve.startidx).error()
+        ret = Solve("cmp", solve.startidx).error()
 
         while startidx < len(solve.ret):
 
@@ -557,56 +692,6 @@ class CmpBlip(Blip):
 
                 ret = Solve(cmpstr, startidx)
         
-        return ret
-
-class SubBlip(Blip):
-
-    def __init__(self):
-        Blip.__init__(self)
-
-        self.blips = []
-
-    def _str(self):
-
-        ret = "sub["
-
-        for blip in self.blips:
-
-            ret += str(blip)
-
-        return ret + "]"
-
-    def _copy(self):
-
-        copy = SubBlip()
-
-        for blip in self.blips:
-
-            copy.blips.append(blip.copy())
-
-        return copy
-
-    def _solve(self, solve):
-
-        ret = Solve(solve.ret, solve.startidx)
-
-        for blip in self.blips:
-
-            try:
-
-                sub = blip.solve(solve)
-                ret.rec = sub.rec
-                
-                if sub.err:
-
-                    raise Exception()
-                
-                ret.ret = ret.ret[sub.ret]
-
-            except:
-                
-                return ret.error()
-
         return ret
 
 class TxtBlip(Blip):
@@ -700,18 +785,21 @@ class ParserMaker:
     def snip_rep(self, snips, args):
 
         sniplen = len(snips)
-        low = 0
-        high = float('inf')
 
-        if sniplen == 2:
+        if sniplen < 2:
 
-            low = snips[1]
-            high = snips[1]
+            low = self.snipSwitch("num",[0],[])
+            high = self.snipSwitch("num",[-1],[])
+
+        elif sniplen == 2:
+
+            low = self.snipBlip(snips[1], args)
+            high = self.snipSwitch("num",[-1],[])
 
         elif sniplen > 2:
 
-            low = snips[1]
-            high = snips[2]
+            low = self.snipBlip(snips[1], args)
+            high = self.snipBlip(snips[1], args)
 
         return RepBlip(self.snipBlip(snips[0], args), low, high)
 
@@ -808,12 +896,11 @@ class ParserMaker:
 
     def snip_txt(self, snips, args):
 
-        return TxtBlip(snips[0])
+        return TxtBlip(str(snips[0]))
 
     def snip_num(self, snips, args):
 
-        return NumBlip(snips[0])
-
+        return NumBlip(int(snips[0]))
 
     def __init__(self, startname, snipmap):
 
@@ -928,52 +1015,58 @@ def Parser(startname, snipmap):
 
     blip = ParserMaker(startname, snipmap).blip
 
+    print(str(blip))
+
+    deepmap = {}
+    blip.deep(deepmap)
+
+    for bid in deepmap:
+
+        print(bid, deepmap[bid])
+
     def ret(ret):
     
         return blip.solve(Solve(ret, 0))
 
     return ret
 
-test = Parser("word", {
-    "pad": [
-        "or",
-        ["cmp"," ","\n","\t"],
-        [
-            "ary",
-            ["cmp","//"],
-            ["rep",["if",["cmp","\n"],"err","nxt"]],
-            ["cmp","\n"]
-        ],
-        [
-            "ary",
-            ["cmp","/*"],
-            ["rep",["if",["cmp","*/"],"err","nxt"]],
-            ["cmp","*/"]
-        ]
-    ],
-    "pad*": ["rep","pad"],
-    "special": [
-        "or",
-        "pad",
-        [
-            "cmp",
-            ":",";",".",
-            "!","*","+",
-            "|","&","#",
-            "[","{","(",
-            "]","}",")"
-        ]
-    ],
-    "word": ["sum",["cat",[
-        "ary",
-        ["ary","nxt"],
-        ["rep",["or",
-            ["f",["ary",["cmp","$"],"nxt"],["sub",1]],
-            ["if","special","err","nxt"]
-        ]]
-    ]]]
-})
 
-ret = test("asdf")
+
+with open('syntax.json') as f:
+
+    import json
+    data = json.load(f)
+
+test = Parser("pad*", data)
+
+ret = test("  // asd;flkjas;dlfkj \n /* as;ldkfj; */")
+stack = Solve.stack
+
+def printstack(stack, depth):
+
+    self = stack[0]
+    solve = stack[1]
+    children = stack[2]
+    ret = stack[3]
+    
+    print(depth,self.id, str(self))
+    print(depth,"  +",solve.ret[slice(solve.startidx,len(solve.ret))])
+
+    for child in children:
+
+        printstack(child, depth + "  ")
+
+    err = "  ="
+
+    if ret.err is True:
+
+        err += "!"
+
+    print(depth, err, ret.ret, ret.retidx, ret.rec)
+
+# for sub in Solve.stack:
+    
+#     printstack(sub,"")
+
 
 print(str(ret.ret))

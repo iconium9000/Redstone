@@ -1,5 +1,7 @@
 #pad := $  | $\n | $\t | [ $// (!$\n & @)* $\n ] | [ $/* ( !*/ & @ )* $*/ ];
 
+#start := #list;
+
 #special :=
   $  | $\n | $\t | $" |
   $: | $; | $. |
@@ -16,18 +18,16 @@
 #match := +[$# => ["mch] +[[#word] [pad* $- pad* #list].3*];
 #text := ["txt" [$" +( [$$ @].1 | ($" ? err : @) )* $"].1];
 #compare := [$$ => "cmp" #word];
-#sub := *[ ["sub"] (
-  ([ $. #num ] => ["int", .1])+ |
-  $. => []
-) ];
+#sub := *[ ["sub"] [$. => "int" #num ]+ | $. => [] ];
 
 #list :=
   #err | #idx | #char | #match | #text | #compare | #sub |
-  { [ $( #pad* #or #pad* $) ] | [ ${ #pad* #or #pad* $} ] }.2 |
-  [ $[ #pad* [ #or #pad* ].0* $] ] => *[ ["ary"] .2 ];
+  [ $( #pad* #ternary #pad* $) ].2 |
+  [ ${ #pad* #ternary #pad* $} ].2 |
+  [ $[ #pad* [ #ternary #pad* ].0* $] ] => *[ ["ary"] .2 ];
 #postfix :=
   [ #postfix $* ] => [ "rep" .0 ] |
-  [ #postfix $+ ] => [ "cat" [[ "ary" .0 ] [ "rep" .0 ]] ] |
+  [ #postfix $+ ] => [ "rep" %1 .0 ] |
   [ #postfix [ $. #word ].1+ ] => [ "f" .0 *[ ["sub"] .1 ] ] |
   #list;
 #prefix :=
@@ -38,6 +38,6 @@
 #fun := *[["f" #prefix] (#pad* $=> #pad* #prefix).3+] | #prefix;
 #and := [#and #pad* $& #pad* #fun] => ["and" .0 .4] | #fun;
 #or := [#or #pad* $| #pad* #and] => ["or" .0 .4] | #and;
-#ternary := [#or #pad* $? #pad* #or #pad* $: #pad* #or] => ["if" .0 .4 .8];
+#ternary := [#or #pad* $? #pad* #or #pad* $: #pad* #or] => ["if" .0 .4 .8] | #or;
 
 #exp := [([pad* #match #pad* $:= #pad* #ternary #pad* $;] => [.0 .4])* pad*].0;

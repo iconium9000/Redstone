@@ -132,7 +132,7 @@ class Blip:
 
                 retrec = ret.rec
                 retidx = ret.retidx
-                ret = self.down.solve(solve)
+                ret = self.down.solve(Solve(ret.ret,0))
                 ret.retidx = retidx
                 ret.rec.update(retrec)
 
@@ -194,7 +194,7 @@ class AryBlip(Blip):
     
     def _copy(self):
 
-        copy = AryBlip()
+        copy = self.__class__()
 
         for blip in self.blips:
 
@@ -732,7 +732,7 @@ class NumBlip(Blip):
 
         return Solve(self.num, solve.startidx)
 
-class ParserMaker:
+class MapBlip(Blip):
 
     def snip_ary(self, snips, args):
 
@@ -790,18 +790,21 @@ class ParserMaker:
 
             low = self.snipSwitch("num",[0],[])
             high = self.snipSwitch("num",[-1],[])
+            inside = self.snipBlip(snips[0], args)
 
         elif sniplen == 2:
 
-            low = self.snipBlip(snips[1], args)
+            low = self.snipBlip(snips[0], args)
             high = self.snipSwitch("num",[-1],[])
+            inside = self.snipBlip(snips[1], args)
 
         elif sniplen > 2:
 
-            low = self.snipBlip(snips[1], args)
+            low = self.snipBlip(snips[0], args)
             high = self.snipBlip(snips[1], args)
+            inside = self.snipBlip(snips[2], args)
 
-        return RepBlip(self.snipBlip(snips[0], args), low, high)
+        return RepBlip(inside, low, high)
 
     def snip_sum(self, snips, args):
 
@@ -902,44 +905,78 @@ class ParserMaker:
 
         return NumBlip(int(snips[0]))
 
+    def snip_map(self, snips, args):
+
+        raise NameError("snip_map TODO")
+
+        # return MapBlip(snips[0], snips[1])
+
     def __init__(self, startname, snipmap):
+        Blip.__init__(self)
 
-        self.snipmap = snipmap
-        self.tok_snips_args_map = {}
-        self.bliplist = []
-        self.blipmap = {}
+        if snipmap is None:
 
-        self.snipfuns = {
-            "ary": self.snip_ary,
+            self.inside = startname
 
-            "f": self.snip_f,
-            "if": self.snip_if,
-            "or": self.snip_or,
-            "and": self.snip_and,
+        else:
 
-            "rep": self.snip_rep,            
-            "not": self.snip_not,
-            "sum": self.snip_sum,
-            "cat": self.snip_cat,
-            "int": self.snip_int,
-            "str": self.snip_str,
+            self.snipmap = snipmap
+            self.tok_snips_args_map = {}
+            self.bliplist = []
+            self.blipmap = {}
 
-            "end": self.snip_end,
-            "err": self.snip_err,
-            "nxt": self.snip_nxt,
-            "idx": self.snip_idx,
+            self.snipfuns = {
+                "ary": self.snip_ary,
+                "sub": self.snip_sub,
 
-            "cmp": self.snip_cmp,
-            "rng": self.snip_rng,
+                "f": self.snip_f,
+                "if": self.snip_if,
+                "or": self.snip_or,
+                "and": self.snip_and,
 
-            "mch": self.snip_mch,
-            "arg": self.snip_arg,
-            "sub": self.snip_sub,
-            "txt": self.snip_txt,
-            "num": self.snip_num
-        }
+                "rep": self.snip_rep,            
+                "not": self.snip_not,
+                "sum": self.snip_sum,
+                "cat": self.snip_cat,
+                "int": self.snip_int,
+                "str": self.snip_str,
 
-        self.blip = self.snipBlip(self.snipmap[startname], [])
+                "end": self.snip_end,
+                "err": self.snip_err,
+                "nxt": self.snip_nxt,
+                "idx": self.snip_idx,
+
+                "cmp": self.snip_cmp,
+                "rng": self.snip_rng,
+
+                "mch": self.snip_mch,
+                "arg": self.snip_arg,
+                "txt": self.snip_txt,
+                "num": self.snip_num,
+
+                "map": self.snip_map
+            }
+
+            self.inside = self.snipBlip(self.snipmap[startname], [])
+
+    def _str(self):
+
+        return "map" + str(self.inside)
+
+    def _deep(self, deepmap):
+
+        self.inside.deep(deepmap)
+
+    def _copy(self):
+
+        return MapBlip(self.inside.copy(),None)
+
+    def _solve(self, solve):
+
+        newsolve = Solve(solve.ret, solve.retidx)
+        newsolve.startidx = solve.startidx
+
+        return self.inside.solve(newsolve)
 
     def snipSwitch(self, tok, snips, args):
 
@@ -1011,62 +1048,15 @@ class ParserMaker:
         
         return self.snipSwitch("txt", [snip], args)
 
-def Parser(startname, snipmap):
-
-    blip = ParserMaker(startname, snipmap).blip
-
-    print(str(blip))
-
-    deepmap = {}
-    blip.deep(deepmap)
-
-    for bid in deepmap:
-
-        print(bid, deepmap[bid])
-
-    def ret(ret):
-    
-        return blip.solve(Solve(ret, 0))
-
-    return ret
-
-
 
 with open('syntax.json') as f:
 
     import json
     data = json.load(f)
 
-test = Parser("pad*", data)
+mapblip = MapBlip("#start", data)
+ret = mapblip.solve(Solve(data["#start_text"], 0))
 
-ret = test("  // asd;flkjas;dlfkj \n /* as;ldkfj; */")
-stack = Solve.stack
-
-def printstack(stack, depth):
-
-    self = stack[0]
-    solve = stack[1]
-    children = stack[2]
-    ret = stack[3]
-    
-    print(depth,self.id, str(self))
-    print(depth,"  +",solve.ret[slice(solve.startidx,len(solve.ret))])
-
-    for child in children:
-
-        printstack(child, depth + "  ")
-
-    err = "  ="
-
-    if ret.err is True:
-
-        err += "!"
-
-    print(depth, err, ret.ret, ret.retidx, ret.rec)
-
-# for sub in Solve.stack:
-    
-#     printstack(sub,"")
-
+print(str(mapblip))
 
 print(str(ret.ret))
